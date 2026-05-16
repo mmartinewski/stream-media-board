@@ -7,7 +7,7 @@ let logFd: number | null = null;
 export function initLogger(logFilePath: string): void {
   if (logFd !== null) return;
   logFd = openSync(logFilePath, 'w');
-  log('info', `logger ativo em ${logFilePath}`);
+  log('info', `logger active at ${logFilePath}`);
 }
 
 export function closeLogger(): void {

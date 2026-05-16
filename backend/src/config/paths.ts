@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 
 const repoRootCandidate = resolve(moduleDir, '..', '..', '..');
+const explicitRuntimeRoot = process.env.PERSONAL_CLIP_PLAYER_ROOT;
 
 const APPDATA_ROOT =
   process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming');
@@ -31,6 +32,7 @@ export interface AppPaths {
 }
 
 export function resolvePaths(): AppPaths {
+  const runtimeRoot = resolveRuntimeRoot();
   const appData = join(APPDATA_ROOT, APP_FOLDER_NAME);
   const database = join(appData, 'database');
   const mediaAudio = join(appData, 'media', 'audio');
@@ -38,9 +40,9 @@ export function resolvePaths(): AppPaths {
   const mediaTemp = join(appData, 'media', 'temp');
   const logs = join(appData, 'logs');
 
-  const bin = join(repoRootCandidate, 'bin');
-  const configFile = join(repoRootCandidate, 'config', 'config.json');
-  const frontendDist = join(repoRootCandidate, 'frontend', 'dist');
+  const bin = join(runtimeRoot, 'bin');
+  const configFile = join(runtimeRoot, 'config', 'config.json');
+  const frontendDist = join(runtimeRoot, 'frontend', 'dist');
 
   return {
     appData,
@@ -59,6 +61,21 @@ export function resolvePaths(): AppPaths {
     configFile,
     frontendDist,
   };
+}
+
+function resolveRuntimeRoot(): string {
+  if (explicitRuntimeRoot) return resolve(explicitRuntimeRoot);
+
+  const electronProcess = process as NodeJS.Process & {
+    defaultApp?: boolean;
+    resourcesPath?: string;
+  };
+  const electronResourcesPath = electronProcess.resourcesPath;
+  if (process.versions.electron && electronResourcesPath && !electronProcess.defaultApp) {
+    return electronResourcesPath;
+  }
+
+  return repoRootCandidate;
 }
 
 export function ensureAppDataDirs(paths: AppPaths): void {

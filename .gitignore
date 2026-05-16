@@ -1,7 +1,9 @@
 node_modules/
 dist/
 build/
+release/
 coverage/
+desktop-runtime/
 
 bin/*.exe
 bin/*.zip

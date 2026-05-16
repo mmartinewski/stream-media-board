@@ -1,8 +1,9 @@
 {
-  "name": "personal-clip-player",
+  "name": "personal-soundboard-player",
   "private": true,
   "version": "0.1.0",
   "description": "Local YouTube clip soundboard with server-side playback and a LAN-controllable UI.",
+  "main": "desktop/main.cjs",
   "workspaces": [
     "backend",
     "frontend"
@@ -15,11 +16,62 @@
     "build:frontend": "npm --workspace frontend run build",
     "build:backend": "npm --workspace backend run build",
     "build": "npm run build:frontend && npm run build:backend",
-    "start": "npm --workspace backend run start"
+    "start": "npm --workspace backend run start",
+    "desktop:dev": "npm run build && electron .",
+    "prepare:desktop-runtime": "node scripts/prepare-desktop-runtime.mjs",
+    "pack:win": "npm run prepare:desktop-runtime && npm run build && electron-builder --win dir",
+    "dist:win": "npm run prepare:desktop-runtime && npm run build && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "express": "^4.19.0",
+    "multer": "^2.1.1",
+    "sharp": "^0.33.0"
   },
   "devDependencies": {
+    "electron": "^42.1.0",
+    "electron-builder": "^26.8.1",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.4.0"
+  },
+  "build": {
+    "appId": "com.mmartinewski.personal-soundboard-player",
+    "productName": "Personal Soundboard Player",
+    "asar": false,
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "backend/package.json",
+      "backend/dist/**/*",
+      "frontend/dist/**/*",
+      "bin/*.exe",
+      "config/config.example.json",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "desktop-runtime/node.exe",
+        "to": "node/node.exe"
+      }
+    ],
+    "win": {
+      "icon": "desktop/assets/play.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Personal Soundboard Player"
+    }
   },
   "engines": {
     "node": ">=20"

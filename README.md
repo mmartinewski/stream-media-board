@@ -1,4 +1,4 @@
-# Personal Clip Player
+# Personal Soundboard Player
 
 Local soundboard for creating and playing audio clips extracted from YouTube. The server runs on the streaming machine and plays audio through `ffplay`; the web UI can be used on the same PC or from a phone/tablet on the same network.
 
@@ -47,6 +47,53 @@ npm start
 ```
 
 After the build, Express serves the static frontend from `frontend/dist/`.
+
+## Windows Installer
+
+Install dependencies and make sure the Windows runtime binaries are available:
+
+```bash
+npm install
+npm run fetch:bin
+```
+
+Build the NSIS installer:
+
+```bash
+npm run dist:win
+```
+
+The installer is generated under `release/`, for example:
+
+```text
+release/Personal Soundboard Player Setup 0.1.0.exe
+```
+
+The installed Personal Soundboard Player app runs in the Windows tray and exposes:
+
+- `Open in Browser` to open the local web UI.
+- `Exit` to stop playback, shut down the backend, and close the tray app.
+
+Use `npm run pack:win` to generate an unpacked build for quick smoke tests.
+
+`release/` is ignored by Git, so installer artifacts stay local unless you publish them manually as GitHub Releases assets.
+
+## Publishing Changes to GitHub
+
+Before committing, run a build:
+
+```bash
+npm run build
+```
+
+Then commit and push the source changes:
+
+```bash
+git status
+git add -A
+git commit -m "Describe the change"
+git push origin main
+```
 
 ## Configuration
 
