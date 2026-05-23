@@ -8,6 +8,7 @@ import { logger } from '../lib/logger.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import {
   downloadBestAudio,
+  downloadBestVideo,
   getYoutubeTitle,
   isValidYoutubeUrl,
   normalizeYoutubeUrl,
@@ -97,6 +98,69 @@ export function prefetchRouter(paths: AppPaths): Router {
 
   router.post('/', handler);
   router.post('', handler);
+
+  router.post('/video', (req: Request, res: Response, next: NextFunction) => {
+    void (async () => {
+      try {
+        assertBinaries(paths);
+        const body = (req.body ?? {}) as { youtube_url?: unknown };
+        const url =
+          typeof body.youtube_url === 'string' ? body.youtube_url.trim() : '';
+        if (!isValidYoutubeUrl(url)) {
+          throw new HttpError(400, 'Invalid YouTube URL.', 'invalid_youtube_url');
+        }
+
+        const normalizedUrl = normalizeYoutubeUrl(url);
+        const processId = newStagingProcessId();
+        const outputBase = join(paths.mediaTemp, processId);
+
+        logger.info('prefetch: downloading video', { processId, url: normalizedUrl });
+        const title = await getYoutubeTitle(
+          paths.ytDlpExe,
+          paths.configFile,
+          paths.youtubeCookiesFile,
+          url,
+          paths.ytDlpNodeExe,
+        ).catch(() => '');
+        const videoPath = await downloadBestVideo({
+          ytDlpExe: paths.ytDlpExe,
+          ytDlpNodeExe: paths.ytDlpNodeExe,
+          ffmpegExe: paths.ffmpegExe,
+          configFile: paths.configFile,
+          youtubeCookiesFile: paths.youtubeCookiesFile,
+          url,
+          outputBase,
+        });
+
+        const response = await stageVideoFile(paths, {
+          processId,
+          sourceUrl: normalizedUrl,
+          videoPath,
+          title,
+          thumbnailUrl: `/api/staging/${processId}/thumbnail`,
+        });
+        res.json(response);
+      } catch (err) {
+        if (err instanceof HttpError) {
+          next(err);
+          return;
+        }
+        if (err instanceof YoutubeDownloadError) {
+          logger.error('prefetch video failed', err);
+          next(new HttpError(502, err.message, err.code));
+          return;
+        }
+        logger.error('prefetch video failed', err);
+        next(
+          new HttpError(
+            502,
+            'Could not download the video (YouTube / yt-dlp).',
+            'prefetch_video_failed',
+          ),
+        );
+      }
+    })();
+  });
 
   router.post('/mp3-url', (req: Request, res: Response, next: NextFunction) => {
     void (async () => {
@@ -191,6 +255,7 @@ async function stageAudioFile(paths: AppPaths, options: StageAudioOptions) {
     audioPath: options.audioPath,
     durationSeconds,
     createdAt: new Date().toISOString(),
+    mediaKind: 'audio',
   };
   writeStagingMeta(paths.mediaTemp, meta);
 
@@ -202,7 +267,75 @@ async function stageAudioFile(paths: AppPaths, options: StageAudioOptions) {
     thumbnail_url: options.thumbnailUrl,
     source_format: ext || 'unknown',
     title: options.title,
+    media_kind: 'audio' as const,
   };
+}
+
+interface StageVideoOptions {
+  processId: string;
+  sourceUrl: string;
+  videoPath: string;
+  title: string;
+  thumbnailUrl: string;
+}
+
+async function stageVideoFile(paths: AppPaths, options: StageVideoOptions) {
+  const durationSeconds = await probeDurationSeconds(paths.ffprobeExe, options.videoPath);
+  if (durationSeconds > MAX_SOURCE_SECONDS + 0.01) {
+    try {
+      unlinkSync(options.videoPath);
+    } catch {
+      /* noop */
+    }
+    throw new HttpError(
+      400,
+      'The source video cannot be longer than 10 minutes.',
+      'source_too_long',
+    );
+  }
+
+  const meta: StagingMeta = {
+    processId: options.processId,
+    youtubeUrl: options.sourceUrl,
+    audioPath: options.videoPath,
+    videoPath: options.videoPath,
+    durationSeconds,
+    createdAt: new Date().toISOString(),
+    mediaKind: 'video',
+  };
+  writeStagingMeta(paths.mediaTemp, meta);
+
+  const ext = extname(options.videoPath).replace(/^\./, '') || 'mp4';
+  return {
+    process_id: options.processId,
+    duration_seconds: durationSeconds,
+    audio_url: '',
+    video_url: `/api/staging/${options.processId}/video`,
+    thumbnail_url: options.thumbnailUrl,
+    source_format: ext || 'mp4',
+    title: options.title,
+    media_kind: 'video' as const,
+  };
+}
+
+export async function stageExistingVideo(
+  paths: AppPaths,
+  videoPath: string,
+  title: string,
+) {
+  if (!existsSync(videoPath)) {
+    throw new HttpError(404, 'Video file not found.', 'video_missing');
+  }
+  const processId = newStagingProcessId();
+  const stagingPath = join(paths.mediaTemp, `${processId}.mp4`);
+  copyFileSync(videoPath, stagingPath);
+  return stageVideoFile(paths, {
+    processId,
+    sourceUrl: `existing-clip://${title || 'clip'}`,
+    videoPath: stagingPath,
+    title,
+    thumbnailUrl: '',
+  });
 }
 
 async function downloadMp3Url(url: string, outputFile: string): Promise<void> {

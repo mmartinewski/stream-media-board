@@ -1,5 +1,6 @@
 import express, { type Express } from 'express';
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { errorHandler } from './middleware/errorHandler.js';
 import { healthRouter } from './routes/health.js';
 import { clipsRouter } from './routes/clips.js';
@@ -10,6 +11,7 @@ import { thumbnailsRouter } from './routes/thumbnails.js';
 import { settingsRouter } from './routes/settings.js';
 import { youtubeRouter } from './routes/youtube.js';
 import { categoriesRouter } from './routes/categories.js';
+import { browserSourceRouter } from './routes/browserSource.js';
 import { logger } from './lib/logger.js';
 import type { AppPaths } from './config/paths.js';
 
@@ -28,9 +30,22 @@ export function createApp(paths: AppPaths): Express {
   app.use('/api/settings', settingsRouter());
   app.use('/api/youtube', youtubeRouter());
   app.use('/api/categories', categoriesRouter());
+  app.use('/api/browser-source', browserSourceRouter(paths));
 
   if (existsSync(paths.frontendDist)) {
     app.use(express.static(paths.frontendDist));
+    const indexHtml = join(paths.frontendDist, 'index.html');
+    app.get('*', (req, res, next) => {
+      if (req.method !== 'GET' || req.path.startsWith('/api')) {
+        next();
+        return;
+      }
+      if (existsSync(indexHtml)) {
+        res.sendFile(indexHtml);
+        return;
+      }
+      next();
+    });
     logger.info(`serving static frontend from ${paths.frontendDist}`);
   } else {
     logger.info(

@@ -134,6 +134,42 @@ export async function downloadBestAudio(options: DownloadAudioOptions): Promise<
   return filePath;
 }
 
+/**
+ * Downloads a merged MP4 suitable for browser overlay playback (max 720p).
+ */
+export async function downloadBestVideo(options: DownloadAudioOptions): Promise<string> {
+  const normalizedUrl = normalizeYoutubeUrl(options.url);
+  const { stdout } = await runYtDlp(
+    options.ytDlpExe,
+    options.configFile,
+    options.youtubeCookiesFile,
+    options.ytDlpNodeExe,
+    [
+      '-f',
+      'bv*[height<=720]+ba/b[ext=mp4]/b[ext=mp4]/bv*+ba/b',
+      '--merge-output-format',
+      'mp4',
+      '--no-playlist',
+      '--no-warnings',
+      '--ffmpeg-location',
+      options.ffmpegExe,
+      '--print',
+      'after_move:filepath',
+      '-o',
+      `${options.outputBase}.%(ext)s`,
+      normalizedUrl,
+    ],
+  );
+  const filePath = stdout.trim().split(/\r?\n/).pop() ?? '';
+  if (!filePath) {
+    throw new YoutubeDownloadError(
+      'yt-dlp did not return the downloaded file path.',
+      'yt_dlp_no_output',
+    );
+  }
+  return filePath;
+}
+
 function buildYtDlpBaseArgs(
   configFile: string,
   youtubeCookiesFile: string,

@@ -8,9 +8,12 @@ export interface SettingsResponse {
   playback_volume: number;
 }
 
+export type ClipType = 'audio' | 'video';
+
 export interface ClipDto {
   id: number;
   title: string;
+  clip_type: ClipType;
   category: { id: number | null; name: string | null };
   tags: string;
   thumbnail_cropped_url: string;
@@ -33,14 +36,17 @@ export interface PrefetchResponse {
   process_id: string;
   duration_seconds: number;
   audio_url: string;
+  video_url?: string;
   thumbnail_url: string;
   source_format: string;
   title?: string;
+  media_kind?: ClipType;
 }
 
 export interface ClipDetail {
   id: number;
   title: string;
+  clip_type: ClipType;
   youtube_url: string;
   start_time: string;
   end_time: string;
@@ -137,6 +143,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ youtube_url }),
     }),
+  prefetchYoutubeVideo: (youtube_url: string) =>
+    request<PrefetchResponse>('/api/clips/prefetch/video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ youtube_url }),
+    }),
   prefetchMp3Url: (audio_url: string) =>
     request<PrefetchResponse>('/api/clips/prefetch/mp3-url', {
       method: 'POST',
@@ -153,6 +165,8 @@ export const api = {
   },
   stageClipAudio: (id: number) =>
     request<PrefetchResponse>(`/api/clips/${id}/stage-audio`, { method: 'POST' }),
+  stageClipVideo: (id: number) =>
+    request<PrefetchResponse>(`/api/clips/${id}/stage-video`, { method: 'POST' }),
   getStagingPreviewUrl: (body: {
     process_id: string;
     start_time: string;
@@ -163,6 +177,17 @@ export const api = {
       start_time: body.start_time,
       end_time: body.end_time,
       audio_normalize: body.audio_normalize === false ? '0' : '1',
+    });
+    return `/api/staging/${encodeURIComponent(body.process_id)}/preview?${params.toString()}`;
+  },
+  getStagingVideoPreviewUrl: (body: {
+    process_id: string;
+    start_time: string;
+    end_time: string;
+  }) => {
+    const params = new URLSearchParams({
+      start_time: body.start_time,
+      end_time: body.end_time,
     });
     return `/api/staging/${encodeURIComponent(body.process_id)}/preview?${params.toString()}`;
   },

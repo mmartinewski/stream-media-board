@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS clips (
     thumbnail_cropped_path TEXT NOT NULL,
     thumbnail_crop_meta TEXT,
     audio_path TEXT NOT NULL,
+    clip_type TEXT NOT NULL DEFAULT 'audio',
+    video_path TEXT,
     volume INTEGER NOT NULL DEFAULT 75,
     audio_normalize INTEGER NOT NULL DEFAULT 0,
     audio_fade INTEGER NOT NULL DEFAULT 0,

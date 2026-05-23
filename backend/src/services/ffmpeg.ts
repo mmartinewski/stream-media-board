@@ -44,3 +44,40 @@ export async function cutToMp3(options: CutToMp3Options): Promise<void> {
 
   await execFileAsync(options.ffmpegExe, args);
 }
+
+export interface CutToMp4Options {
+  ffmpegExe: string;
+  inputFile: string;
+  outputFile: string;
+  startSeconds: number;
+  durationSeconds: number;
+}
+
+export async function cutToMp4(options: CutToMp4Options): Promise<void> {
+  const args = [
+    '-y',
+    '-loglevel',
+    'error',
+    '-ss',
+    options.startSeconds.toFixed(3),
+    '-i',
+    options.inputFile,
+    '-t',
+    options.durationSeconds.toFixed(3),
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '23',
+    '-c:a',
+    'aac',
+    '-b:a',
+    '128k',
+    '-movflags',
+    '+faststart',
+    options.outputFile,
+  ];
+
+  await execFileAsync(options.ffmpegExe, args);
+}

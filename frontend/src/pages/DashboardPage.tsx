@@ -510,17 +510,19 @@ export default function DashboardPage() {
                           <span aria-hidden="true">✎</span>
                           Edit clip
                         </Link>
-                        <button
-                          type="button"
-                          onClick={() => void handleDownload(clip)}
-                          disabled={downloadingId === clip.id}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <span aria-hidden="true">
-                            <DownloadIcon />
-                          </span>
-                          {downloadingId === clip.id ? 'Downloading...' : 'Download'}
-                        </button>
+                        {clip.clip_type !== 'video' ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleDownload(clip)}
+                            disabled={downloadingId === clip.id}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <span aria-hidden="true">
+                              <DownloadIcon />
+                            </span>
+                            {downloadingId === clip.id ? 'Downloading...' : 'Download'}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => requestDelete(clip)}
@@ -556,9 +558,17 @@ export default function DashboardPage() {
                     </button>
                   </div>
                   <div className="p-3">
-                    <p className="truncate font-medium">{clip.title}</p>
+                    <p className="truncate font-medium">
+                      {clip.title}
+                      {clip.clip_type === 'video' ? (
+                        <span className="ml-2 rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sky-200">
+                          Video
+                        </span>
+                      ) : null}
+                    </p>
                     <p className="truncate text-xs text-text-muted">
                       {clip.category.name ?? '(uncategorized)'}
+                      {clip.clip_type === 'video' ? ' · Browser overlay' : ''}
                     </p>
                   </div>
                   {cardErrors[clip.id] && (

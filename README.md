@@ -29,6 +29,15 @@ npm run fetch:bin
 
 `npm run fetch:bin` downloads the required executables into `bin/`. They are ignored by Git; see [`bin/README.md`](bin/README.md) for manual installation if the automatic download fails.
 
+## Browser source (OBS / Streamlabs)
+
+Overlay URL for a transparent browser source that plays triggered clips:
+
+- Dev: `http://localhost:5173/overlay/browser`
+- Production: `http://localhost:3847/overlay/browser`
+
+Create **YouTube video** clips in the editor; clicking a video clip on the dashboard plays it on the overlay. See [docs/next-release.md](docs/next-release.md) for OBS setup and release checklist.
+
 ## Development
 
 ```bash

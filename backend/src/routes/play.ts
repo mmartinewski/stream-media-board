@@ -7,6 +7,7 @@ import { getClipById } from '../db/repositories/clips.js';
 import { assertBinaries } from '../lib/binaries.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { playAudio, stopActivePlayback } from '../services/audioPlayer.js';
+import { publishBrowserSourceEvent } from '../services/browserSourceHub.js';
 import { cutToMp3 } from '../services/ffmpeg.js';
 import {
   isValidProcessId,
@@ -136,15 +137,28 @@ export function playRouter(paths: AppPaths): Router {
       if (!row) {
         throw new HttpError(404, 'Clip not found.', 'clip_not_found');
       }
+      if (row.clip_type === 'video') {
+        if (!row.video_path || !existsSync(row.video_path)) {
+          throw new HttpError(404, 'Video file not found.', 'video_missing');
+        }
+        stopActivePlayback();
+        publishBrowserSourceEvent({
+          type: 'play',
+          mediaUrl: `/api/clips/${id}/video`,
+        });
+        res.json({ status: 'playing', playback: 'browser_source' });
+        return;
+      }
       if (!existsSync(row.audio_path)) {
         throw new HttpError(404, 'Audio file not found.', 'audio_missing');
       }
+      stopActivePlayback();
       playAudio({
         ffplayExe: paths.ffplayExe,
         audioFile: row.audio_path,
         volume: row.volume,
       });
-      res.json({ status: 'playing' });
+      res.json({ status: 'playing', playback: 'local' });
     } catch (err) {
       next(err);
     }

@@ -21,7 +21,7 @@ import {
 } from '../services/clipMutations.js';
 import { isValidProcessId } from '../services/stagingRegistry.js';
 import { isValidYoutubeUrl } from '../services/youtube.js';
-import { stageExistingAudio } from './prefetch.js';
+import { stageExistingAudio, stageExistingVideo } from './prefetch.js';
 
 interface SectionFavorites {
   type: 'favorites';
@@ -37,6 +37,7 @@ interface SectionCategory {
 interface ClipDto {
   id: number;
   title: string;
+  clip_type: 'audio' | 'video';
   category: { id: number | null; name: string | null };
   tags: string;
   thumbnail_cropped_url: string;
@@ -63,6 +64,7 @@ export function clipsRouter(): Router {
       const dto: ClipDto = {
         id: row.id,
         title: row.title,
+        clip_type: row.clip_type === 'video' ? 'video' : 'audio',
         category: { id: row.category_id, name: row.category_name },
         tags: row.tags ?? '',
         thumbnail_cropped_url: `/api/thumbnails/${row.id}/cropped`,
@@ -171,6 +173,7 @@ export function clipsRouter(): Router {
           const audioNormalize = parseBooleanFlag(field(body, 'audio_normalize'));
           const favRaw = field(body, 'is_favorite');
           const isFavorite = favRaw === '1' || favRaw === 'true' ? 1 : 0;
+          const clipType = parseClipTypeField(field(body, 'clip_type'));
 
           if (!title) {
             throw new HttpError(400, 'Title is required.', 'missing_title');
@@ -200,6 +203,7 @@ export function clipsRouter(): Router {
             thumbnailBuffer: file.buffer,
             originalFilename: file.originalname ?? 'thumb.jpg',
             mimeType: file.mimetype,
+            clipType,
           });
           res.status(201).json({ id, message: 'Clip created.' });
         } catch (err) {
@@ -217,12 +221,38 @@ export function clipsRouter(): Router {
       if (!row) {
         throw new HttpError(404, 'Clip not found.', 'clip_not_found');
       }
+      if (row.clip_type === 'video') {
+        throw new HttpError(400, 'This clip is a video overlay, not audio.', 'clip_is_video');
+      }
       assertClipPathsBelongToApp(paths, row);
       if (!existsSync(row.audio_path)) {
         throw new HttpError(404, 'Audio file not found.', 'audio_missing');
       }
       res.setHeader('Content-Type', 'audio/mpeg');
       res.download(row.audio_path, `${toDownloadFilename(row.title)}.mp3`);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/:id/video', (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = parseClipId(req.params.id);
+      const db = getDb(paths.databaseFile);
+      const row = getClipById(db, id);
+      if (!row) {
+        throw new HttpError(404, 'Clip not found.', 'clip_not_found');
+      }
+      if (row.clip_type !== 'video') {
+        throw new HttpError(400, 'This clip is not a video overlay.', 'clip_is_audio');
+      }
+      assertClipPathsBelongToApp(paths, row);
+      if (!row.video_path || !existsSync(row.video_path)) {
+        throw new HttpError(404, 'Video file not found.', 'video_missing');
+      }
+      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.sendFile(row.video_path);
     } catch (err) {
       next(err);
     }
@@ -239,6 +269,7 @@ export function clipsRouter(): Router {
       res.json({
         id: row.id,
         title: row.title,
+        clip_type: row.clip_type === 'video' ? 'video' : 'audio',
         youtube_url: row.youtube_url,
         start_time: row.start_time,
         end_time: row.end_time,
@@ -279,6 +310,7 @@ export function clipsRouter(): Router {
           const audioNormalize = parseBooleanFlag(field(body, 'audio_normalize'));
           const favRaw = field(body, 'is_favorite');
           const isFavorite = favRaw === '1' || favRaw === 'true' ? 1 : 0;
+          const clipType = parseClipTypeField(field(body, 'clip_type'));
           const file = req.file;
 
           if (!title) {
@@ -309,6 +341,7 @@ export function clipsRouter(): Router {
             thumbnailBuffer: file?.buffer,
             originalFilename: file?.originalname,
             mimeType: file?.mimetype,
+            clipType,
           });
           res.json({ id, message: 'Clip updated.' });
         } catch (err) {
@@ -366,8 +399,32 @@ export function clipsRouter(): Router {
         if (!row) {
           throw new HttpError(404, 'Clip not found.', 'clip_not_found');
         }
+        if (row.clip_type === 'video') {
+          throw new HttpError(400, 'Use stage-video for video clips.', 'clip_is_video');
+        }
         assertClipPathsBelongToApp(paths, row);
         const response = await stageExistingAudio(paths, row.audio_path, row.title);
+        res.json(response);
+      } catch (err) {
+        next(err);
+      }
+    })();
+  });
+
+  router.post('/:id/stage-video', (req: Request, res: Response, next: NextFunction) => {
+    void (async () => {
+      try {
+        const id = parseClipId(req.params.id);
+        const db = getDb(paths.databaseFile);
+        const row = getClipById(db, id);
+        if (!row) {
+          throw new HttpError(404, 'Clip not found.', 'clip_not_found');
+        }
+        if (row.clip_type !== 'video' || !row.video_path) {
+          throw new HttpError(400, 'Clip is not a video overlay.', 'clip_is_audio');
+        }
+        assertClipPathsBelongToApp(paths, row);
+        const response = await stageExistingVideo(paths, row.video_path, row.title);
         res.json(response);
       } catch (err) {
         next(err);
@@ -456,6 +513,10 @@ function isValidSourceUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function parseClipTypeField(raw: string): 'audio' | 'video' {
+  return raw === 'video' ? 'video' : 'audio';
 }
 
 function toDownloadFilename(title: string): string {

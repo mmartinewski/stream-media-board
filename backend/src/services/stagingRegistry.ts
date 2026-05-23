@@ -5,12 +5,16 @@ import { randomUUID } from 'node:crypto';
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+export type StagingMediaKind = 'audio' | 'video';
+
 export interface StagingMeta {
   readonly processId: string;
   readonly youtubeUrl: string;
   readonly audioPath: string;
   readonly durationSeconds: number;
   readonly createdAt: string;
+  readonly mediaKind: StagingMediaKind;
+  readonly videoPath?: string;
 }
 
 export function isValidProcessId(id: string): boolean {
@@ -51,16 +55,33 @@ export function readStagingMeta(
     ) {
       return null;
     }
+    const mediaKind =
+      o.mediaKind === 'video' || o.mediaKind === 'audio'
+        ? o.mediaKind
+        : 'audio';
+    const videoPath =
+      typeof o.videoPath === 'string' && o.videoPath.length > 0
+        ? o.videoPath
+        : undefined;
     return {
       processId: o.processId,
       youtubeUrl: o.youtubeUrl,
       audioPath: o.audioPath,
       durationSeconds: o.durationSeconds,
       createdAt: o.createdAt,
+      mediaKind,
+      videoPath,
     };
   } catch {
     return null;
   }
+}
+
+export function stagingInputPath(meta: StagingMeta): string {
+  if (meta.mediaKind === 'video' && meta.videoPath) {
+    return meta.videoPath;
+  }
+  return meta.audioPath;
 }
 
 export function deleteStagingBundle(
@@ -75,10 +96,13 @@ export function deleteStagingBundle(
     /* noop */
   }
   if (meta) {
-    try {
-      unlinkSync(meta.audioPath);
-    } catch {
-      /* noop */
+    const paths = new Set([meta.audioPath, meta.videoPath].filter(Boolean) as string[]);
+    for (const filePath of paths) {
+      try {
+        unlinkSync(filePath);
+      } catch {
+        /* noop */
+      }
     }
   }
 }
@@ -94,6 +118,8 @@ export function stagingMetaExpired(
 
 export function guessMimeFromPath(filePath: string): string {
   const ext = basename(filePath).toLowerCase();
+  if (ext.endsWith('.mp4')) return 'video/mp4';
+  if (ext.endsWith('.webm')) return 'video/webm';
   if (ext.endsWith('.m4a') || ext.endsWith('.mp4')) return 'audio/mp4';
   if (ext.endsWith('.webm')) return 'audio/webm';
   if (ext.endsWith('.opus')) return 'audio/opus';

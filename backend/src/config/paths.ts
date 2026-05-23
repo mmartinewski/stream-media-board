@@ -18,6 +18,7 @@ export interface AppPaths {
   readonly database: string;
   readonly databaseFile: string;
   readonly mediaAudio: string;
+  readonly mediaVideo: string;
   readonly mediaThumbnails: string;
   readonly mediaTemp: string;
   readonly logs: string;
@@ -32,6 +33,8 @@ export interface AppPaths {
   readonly configFile: string;
   readonly youtubeCookiesFile: string;
   readonly frontendDist: string;
+  /** Dev/test media bundled with the repo (e.g. browser source smoke tests). */
+  readonly mediaFiles: string;
 }
 
 export function resolvePaths(): AppPaths {
@@ -39,6 +42,7 @@ export function resolvePaths(): AppPaths {
   const appData = join(APPDATA_ROOT, APP_FOLDER_NAME);
   const database = join(appData, 'database');
   const mediaAudio = join(appData, 'media', 'audio');
+  const mediaVideo = join(appData, 'media', 'video');
   const mediaThumbnails = join(appData, 'media', 'thumbnails');
   const mediaTemp = join(appData, 'media', 'temp');
   const logs = join(appData, 'logs');
@@ -46,12 +50,14 @@ export function resolvePaths(): AppPaths {
   const bin = join(runtimeRoot, 'bin');
   const configFile = join(runtimeRoot, 'config', 'config.json');
   const frontendDist = join(runtimeRoot, 'frontend', 'dist');
+  const mediaFiles = join(runtimeRoot, 'media-files');
 
   return {
     appData,
     database,
     databaseFile: join(database, 'storage.db'),
     mediaAudio,
+    mediaVideo,
     mediaThumbnails,
     mediaTemp,
     logs,
@@ -65,6 +71,7 @@ export function resolvePaths(): AppPaths {
     configFile,
     youtubeCookiesFile: join(appData, 'youtube.cookies.txt'),
     frontendDist,
+    mediaFiles,
   };
 }
 
@@ -113,6 +120,7 @@ export function ensureAppDataDirs(paths: AppPaths): void {
     paths.appData,
     paths.database,
     paths.mediaAudio,
+    paths.mediaVideo,
     paths.mediaThumbnails,
     paths.mediaTemp,
     paths.logs,
