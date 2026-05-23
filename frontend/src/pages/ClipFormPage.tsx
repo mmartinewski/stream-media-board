@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, type PrefetchResponse } from '../lib/api';
 import { getBrowserOverlayUrl } from '../lib/overlay';
+import type { VideoOrientation } from '../lib/api';
+import { normalizeVideoOrientation, videoOrientationLabel } from '../lib/videoOrientation';
 import VideoRangeTrimmer from '../components/VideoRangeTrimmer';
 import { isValidYoutubeUrl } from '../lib/youtube';
 import { isValidTimeString, secondsToTimeString, timeStringToSeconds } from '../lib/time';
@@ -78,6 +80,51 @@ function parseServerCrop(json: string | null | undefined): CropRect | null {
   } catch {
     return null;
   }
+}
+
+function isSavedClipSourceReference(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.startsWith('local-file://') || trimmed.startsWith('existing-clip://');
+}
+
+function savedClipSourceLabel(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('local-file://')) {
+    return trimmed.slice('local-file://'.length) || 'local file';
+  }
+  if (trimmed.startsWith('existing-clip://')) {
+    return trimmed.slice('existing-clip://'.length) || 'saved clip';
+  }
+  return trimmed;
+}
+
+function clampTrimTimesToDuration(
+  startTime: string,
+  endTime: string,
+  durationSeconds: number,
+): { startTime: string; endTime: string } {
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return { startTime, endTime };
+  }
+  let startSec = isValidTimeString(startTime) ? timeStringToSeconds(startTime) : 0;
+  let endSec = isValidTimeString(endTime) ? timeStringToSeconds(endTime) : durationSeconds;
+  if (!Number.isFinite(startSec)) startSec = 0;
+  if (!Number.isFinite(endSec)) endSec = durationSeconds;
+
+  startSec = Math.max(0, Math.min(startSec, durationSeconds));
+  endSec = Math.max(0, Math.min(endSec, durationSeconds));
+  if (endSec <= startSec) {
+    endSec = Math.min(durationSeconds, startSec + MIN_CLIP_SEC);
+  }
+  if (endSec <= startSec) {
+    startSec = 0;
+    endSec = Math.min(durationSeconds, MAX_CLIP_SEC);
+  }
+
+  return {
+    startTime: secondsToTimeString(startSec),
+    endTime: secondsToTimeString(endSec),
+  };
 }
 
 function parseTags(raw: string): string[] {
@@ -544,6 +591,10 @@ export default function ClipFormPage({ mode }: Props) {
   const [videoPreviewNonce, setVideoPreviewNonce] = useState(0);
   const [videoPreviewCutUrl, setVideoPreviewCutUrl] = useState<string | null>(null);
   const [videoPreviewLoop, setVideoPreviewLoop] = useState(false);
+  const [videoOrientation, setVideoOrientation] = useState<VideoOrientation>('landscape');
+  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(
+    null,
+  );
 
   const [editorKind, setEditorKind] = useState<EditorKind>('audio');
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -611,7 +662,10 @@ export default function ClipFormPage({ mode }: Props) {
         : Boolean(localMp3File));
   const canPrefetchVideo =
     !prefetching &&
-    (videoSourceType === 'youtube' ? validYoutubeUrl : Boolean(localVideoFile));
+    (videoSourceType === 'youtube'
+      ? validYoutubeUrl
+      : Boolean(localVideoFile) ||
+        (mode === 'edit' && isSavedClipSourceReference(sourceReference)));
   const thumbReady = Boolean(thumbPreviewSrc && crop);
   const canSaveCreate =
     mode === 'create' &&
@@ -648,6 +702,12 @@ export default function ClipFormPage({ mode }: Props) {
       const endSec = Math.min(MAX_CLIP_SEC, pf.duration_seconds);
       setStartTime('00:00:00.000');
       setEndTime(secondsToTimeString(endSec));
+    }
+    if (kind === 'video' && pf.suggested_orientation) {
+      setVideoOrientation(pf.suggested_orientation);
+    }
+    if (kind === 'video' && pf.video_width && pf.video_height) {
+      setVideoDimensions({ width: pf.video_width, height: pf.video_height });
     }
   }, []);
 
@@ -709,6 +769,12 @@ export default function ClipFormPage({ mode }: Props) {
         }
         setStartTime(c.start_time);
         setEndTime(c.end_time);
+        if (isVideoClip && c.video_orientation) {
+          setVideoOrientation(normalizeVideoOrientation(c.video_orientation));
+        }
+        if (isVideoClip && c.video_width && c.video_height) {
+          setVideoDimensions({ width: c.video_width, height: c.video_height });
+        }
         setPendingServerCrop(parseServerCrop(c.thumbnail_crop_meta));
         setThumbFile(null);
         setThumbPreviewSrc(c.thumbnail_original_url);
@@ -726,6 +792,16 @@ export default function ClipFormPage({ mode }: Props) {
           preserveTimes: true,
           mediaKind: isVideoClip ? 'video' : 'audio',
         });
+        const clamped = clampTrimTimesToDuration(
+          c.start_time,
+          c.end_time,
+          pf.duration_seconds,
+        );
+        setStartTime(clamped.startTime);
+        setEndTime(clamped.endTime);
+        if (isVideoClip && !isValidYoutubeUrl(c.youtube_url) && isSavedClipSourceReference(c.youtube_url)) {
+          setSourceReference(`existing-clip://${c.title.trim() || 'clip'}`);
+        }
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : String(e));
@@ -890,6 +966,17 @@ export default function ClipFormPage({ mode }: Props) {
         const source = youtubeUrl.trim();
         const pf = await api.prefetchYoutubeVideo(source);
         applyPrefetchResult(pf, { sourceReference: source, mediaKind: 'video' });
+      } else if (
+        mode === 'edit' &&
+        Number.isInteger(clipId) &&
+        clipId >= 1 &&
+        isSavedClipSourceReference(sourceReference)
+      ) {
+        const pf = await api.stageClipVideo(clipId);
+        applyPrefetchResult(pf, {
+          sourceReference: `existing-clip://${title.trim() || 'clip'}`,
+          mediaKind: 'video',
+        });
       } else if (localVideoFile) {
         const pf = await api.prefetchVideoFile(localVideoFile);
         applyPrefetchResult(pf, {
@@ -1048,6 +1135,9 @@ export default function ClipFormPage({ mode }: Props) {
     fd.append('volume', String(volume));
     fd.append('audio_normalize', editorKind === 'audio' ? '1' : '0');
     fd.append('clip_type', editorKind);
+    if (editorKind === 'video') {
+      fd.append('video_orientation', videoOrientation);
+    }
     if (crop) {
       fd.append('thumbnail_crop_meta', JSON.stringify(crop));
     }
@@ -1065,6 +1155,22 @@ export default function ClipFormPage({ mode }: Props) {
     }
     if (!processId) {
       setError(editorKind === 'video' ? 'Load the video before saving.' : 'Load the audio before saving.');
+      return;
+    }
+    if (
+      editorKind === 'video' &&
+      videoSourceType === 'youtube' &&
+      !isValidYoutubeUrl(sourceReference.trim())
+    ) {
+      setError('Load the YouTube video before saving.');
+      return;
+    }
+    if (
+      editorKind === 'audio' &&
+      audioSourceType === 'youtube' &&
+      !isValidYoutubeUrl(sourceReference.trim())
+    ) {
+      setError('Load the YouTube audio before saving.');
       return;
     }
     if (!thumbReady) {
@@ -1174,25 +1280,33 @@ export default function ClipFormPage({ mode }: Props) {
               Streamlabs Desktop (browser source).
             </p>
             <p className="mt-2 text-xs text-text-muted">
-              Add a <span className="font-medium text-text">Browser Source</span> in your
-              streaming app and paste this URL:
+              Use separate browser sources for landscape, portrait, or any orientation:
             </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <code className="min-w-0 flex-1 break-all rounded-md border border-surface bg-bg px-2 py-1.5 text-xs text-text">
-                {getBrowserOverlayUrl()}
-              </code>
-              <button
-                type="button"
-                onClick={() => {
-                  void navigator.clipboard.writeText(getBrowserOverlayUrl()).catch(() => {
-                    setError('Could not copy the overlay URL to the clipboard.');
-                  });
-                }}
-                className="shrink-0 rounded-md border border-surface bg-bg px-3 py-1.5 text-xs font-medium hover:border-accent"
-              >
-                Copy URL
-              </button>
-            </div>
+            <ul className="mt-2 space-y-2 text-xs text-text-muted">
+              {([
+                ['universal', 'Universal (any clip)'],
+                ['landscape', 'Landscape only'],
+                ['portrait', 'Portrait only'],
+              ] as const).map(([mode, label]) => (
+                <li key={mode} className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-[7rem] font-medium text-text">{label}</span>
+                  <code className="min-w-0 flex-1 break-all rounded-md border border-surface bg-bg px-2 py-1 text-text">
+                    {getBrowserOverlayUrl(mode)}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(getBrowserOverlayUrl(mode)).catch(() => {
+                        setError('Could not copy the overlay URL to the clipboard.');
+                      });
+                    }}
+                    className="shrink-0 rounded-md border border-surface bg-bg px-2 py-1 text-xs font-medium hover:border-accent"
+                  >
+                    Copy
+                  </button>
+                </li>
+              ))}
+            </ul>
             <ul className="mt-3 list-inside list-disc space-y-1 text-xs text-text-muted">
               <li>
                 <span className="font-medium text-text">OBS Studio:</span> Sources → + → Browser
@@ -1317,6 +1431,12 @@ export default function ClipFormPage({ mode }: Props) {
             )}
 
             {editorKind === 'video' && videoSourceType === 'local-file' && (
+              mode === 'edit' && isSavedClipSourceReference(sourceReference) ? (
+                <p className="min-w-[200px] flex-1 text-sm text-text-muted">
+                  Saved clip ({savedClipSourceLabel(sourceReference)}). Preview and save use the
+                  exported MP4. Switch to YouTube above if you want to re-download from a link.
+                </p>
+              ) : (
               <input
                 id="local-video"
                 type="file"
@@ -1327,6 +1447,7 @@ export default function ClipFormPage({ mode }: Props) {
                 }}
                 className="block min-w-[200px] flex-1 text-sm text-text-muted file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
               />
+              )
             )}
 
             <button
@@ -1351,7 +1472,10 @@ export default function ClipFormPage({ mode }: Props) {
             youtubeUrl.length > 0 && (
             <p className="mt-2 text-sm text-red-300">Invalid YouTube URL.</p>
           )}
-          {editorKind === 'video' && videoSourceType === 'local-file' && !localVideoFile && (
+          {editorKind === 'video' &&
+            videoSourceType === 'local-file' &&
+            !localVideoFile &&
+            !(mode === 'edit' && isSavedClipSourceReference(sourceReference)) && (
             <p className="mt-2 text-xs text-text-muted">
               MP4, WebM, MOV, or MKV — up to 10 minutes and 300 MB.
             </p>
@@ -1486,6 +1610,34 @@ export default function ClipFormPage({ mode }: Props) {
               (same as save) so playback matches the cut. Saving writes the final MP4 for OBS.
             </p>
           )}
+          {editorKind === 'video' ? (
+            <p className="sm:col-span-2">
+              <label htmlFor="video-orientation" className="block text-sm font-medium">
+                Video orientation
+              </label>
+              <select
+                id="video-orientation"
+                value={videoOrientation}
+                onChange={(e) => setVideoOrientation(e.target.value as VideoOrientation)}
+                className="mt-1 rounded-md border border-surface bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+              >
+                {(['landscape', 'portrait'] as const).map((value) => (
+                  <option key={value} value={value}>
+                    {videoOrientationLabel(value)}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-text-muted">
+                Suggested when the video loads (near-square videos count as landscape).
+                {videoDimensions ? (
+                  <>
+                    {' '}
+                    Detected size: {videoDimensions.width}×{videoDimensions.height}.
+                  </>
+                ) : null}
+              </span>
+            </p>
+          ) : null}
           <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
             <button
               type="button"

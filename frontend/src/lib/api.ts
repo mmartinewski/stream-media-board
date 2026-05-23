@@ -32,6 +32,8 @@ export interface ClipsResponse {
   playback_volume: number;
 }
 
+export type VideoOrientation = 'landscape' | 'portrait';
+
 export interface PrefetchResponse {
   process_id: string;
   duration_seconds: number;
@@ -41,6 +43,9 @@ export interface PrefetchResponse {
   source_format: string;
   title?: string;
   media_kind?: ClipType;
+  video_width?: number;
+  video_height?: number;
+  suggested_orientation?: VideoOrientation;
 }
 
 export interface ClipDetail {
@@ -59,6 +64,9 @@ export interface ClipDetail {
   audio_normalize: number;
   is_favorite: number;
   created_at: string;
+  video_width?: number | null;
+  video_height?: number | null;
+  video_orientation?: VideoOrientation | null;
 }
 
 export interface CategorySuggestion {

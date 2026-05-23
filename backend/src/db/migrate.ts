@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS clips (
     audio_path TEXT NOT NULL,
     clip_type TEXT NOT NULL DEFAULT 'audio',
     video_path TEXT,
+    video_width INTEGER,
+    video_height INTEGER,
+    video_orientation TEXT,
     volume INTEGER NOT NULL DEFAULT 75,
     audio_normalize INTEGER NOT NULL DEFAULT 0,
     audio_fade INTEGER NOT NULL DEFAULT 0,
@@ -46,6 +49,12 @@ export function migrate(db: BetterDatabase): void {
   ensureColumn(db, 'clips', 'audio_fade', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn(db, 'clips', 'clip_type', "TEXT NOT NULL DEFAULT 'audio'");
   ensureColumn(db, 'clips', 'video_path', 'TEXT');
+  ensureColumn(db, 'clips', 'video_width', 'INTEGER');
+  ensureColumn(db, 'clips', 'video_height', 'INTEGER');
+  ensureColumn(db, 'clips', 'video_orientation', 'TEXT');
+  db.prepare(
+    `UPDATE clips SET video_orientation = 'landscape' WHERE video_orientation = 'square'`,
+  ).run();
 }
 
 function ensureColumn(

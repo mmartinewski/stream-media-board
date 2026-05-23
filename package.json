@@ -1,7 +1,7 @@
 {
   "name": "personal-soundboard-player",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Local YouTube clip soundboard with server-side playback and a LAN-controllable UI.",
   "main": "desktop/main.cjs",
   "workspaces": [

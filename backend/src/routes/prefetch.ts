@@ -14,7 +14,10 @@ import {
   normalizeYoutubeUrl,
   YoutubeDownloadError,
 } from '../services/youtube.js';
-import { probeDurationSeconds } from '../services/ffprobe.js';
+import { probeDurationSeconds, probeVideoDimensions } from '../services/ffprobe.js';
+import {
+  deriveVideoOrientation,
+} from '../services/videoOrientation.js';
 import {
   newStagingProcessId,
   writeStagingMeta,
@@ -341,6 +344,18 @@ async function stageVideoFile(paths: AppPaths, options: StageVideoOptions) {
     );
   }
 
+  let videoWidth: number | undefined;
+  let videoHeight: number | undefined;
+  let suggestedOrientation: ReturnType<typeof deriveVideoOrientation> | undefined;
+  try {
+    const dims = await probeVideoDimensions(paths.ffprobeExe, options.videoPath);
+    videoWidth = dims.width;
+    videoHeight = dims.height;
+    suggestedOrientation = deriveVideoOrientation(dims.width, dims.height);
+  } catch {
+    /* optional for staging */
+  }
+
   const meta: StagingMeta = {
     processId: options.processId,
     youtubeUrl: options.sourceUrl,
@@ -362,6 +377,9 @@ async function stageVideoFile(paths: AppPaths, options: StageVideoOptions) {
     source_format: ext || 'mp4',
     title: options.title,
     media_kind: 'video' as const,
+    video_width: videoWidth,
+    video_height: videoHeight,
+    suggested_orientation: suggestedOrientation,
   };
 }
 

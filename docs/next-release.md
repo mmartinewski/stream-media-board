@@ -19,13 +19,17 @@ No dashboard, clipes marcados como **Video** disparam o overlay no OBS ao clicar
 
 ### URLs
 
-| Ambiente | URL do overlay |
+Cada fonte browser usa `?mode=universal`, `?mode=landscape` ou `?mode=portrait`. Vídeos quadrados (1:1) são tratados como **landscape**.
+
+| Ambiente | Exemplo (universal) |
 | --- | --- |
-| Desenvolvimento (`npm run dev`) | `http://localhost:5173/overlay/browser` |
-| Produção local (`npm start`) | `http://localhost:3847/overlay/browser` |
-| LAN (celular / outro PC) | `http://<IP-do-PC-streaming>:3847/overlay/browser` |
+| Desenvolvimento (`npm run dev`) | `http://localhost:5173/overlay/browser?mode=universal` |
+| Produção local (`npm start`) | `http://localhost:3847/overlay/browser?mode=universal` |
+| LAN (celular / outro PC) | `http://<IP-do-PC-streaming>:3847/overlay/browser?mode=landscape` (etc.) |
 
 Use a mesma origem do backend em produção (porta **3847**). No dev, o Vite (**5173**) faz proxy de `/api` para o backend.
+
+No formulário de clipe (**Video clip**), o card lista as três URLs (universal / landscape / portrait) com **Copy**. O campo **Video orientation** define como o clipe é classificado; dimensões são gravadas no banco e clipes antigos são preenchidos via ffprobe na subida do servidor.
 
 ### Configuração no OBS / Streamlabs
 
@@ -34,14 +38,14 @@ Guia completo (OBS Studio e Streamlabs Desktop): **[browser-source-setup.md](./b
 Resumo:
 
 1. Adicione uma fonte **Browser** (Browser Source).
-2. Cole a URL do overlay (tabela acima).
+2. Cole a URL do overlay com o `?mode=` desejado (tabela acima).
 3. Defina largura e altura do canvas (ex.: 1920×1080).
 4. Ative **Shutdown source when not visible** apenas se quiser economizar recursos; para testes, deixe desligado.
 5. Marque **Refresh browser when scene becomes active** se o SSE desconectar após muito tempo ocioso.
 
 A página usa fundo transparente. Se o OBS mostrar fundo preto, confira se a fonte não está com cor de fundo forçada nas propriedades da fonte.
 
-No formulário de clipe (**Video clip**), um card mostra a URL do overlay e instruções resumidas.
+No formulário de clipe (**Video clip**), um card mostra as três URLs do overlay e instruções resumidas.
 
 ### Teste rápido (overlay)
 
@@ -56,15 +60,21 @@ Se nada aparecer no OBS, recarregue a fonte browser e confira se o overlay está
 
 | Método | Rota | Descrição |
 | --- | --- | --- |
-| `GET` | `/api/browser-source/events` | SSE: eventos `play` com `mediaUrl` |
-| `GET` | `/api/browser-source/status` | Clientes conectados e caminho do overlay |
+| `GET` | `/api/browser-source/events?mode=universal\|landscape\|portrait` | SSE: eventos `play` filtrados por orientação do clipe |
+| `GET` | `/api/browser-source/status` | Clientes conectados, modos e caminhos do overlay |
 
-Clipes de vídeo disparam o overlay via `POST /api/clips/:id/play` (evento SSE com `mediaUrl` do clipe salvo).
+Clipes de vídeo disparam o overlay via `POST /api/clips/:id/play` (evento SSE com `mediaUrl`, `width`, `height`, `orientation`).
 
 Exemplo de evento SSE:
 
 ```json
-{ "type": "play", "mediaUrl": "/api/clips/42/video" }
+{
+  "type": "play",
+  "mediaUrl": "/api/clips/42/video",
+  "width": 1920,
+  "height": 1080,
+  "orientation": "landscape"
+}
 ```
 
 ## Checklist de release

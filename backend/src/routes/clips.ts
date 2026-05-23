@@ -21,6 +21,7 @@ import {
 } from '../services/clipMutations.js';
 import { isValidProcessId } from '../services/stagingRegistry.js';
 import { isValidYoutubeUrl } from '../services/youtube.js';
+import { parseVideoOrientation } from '../services/videoOrientation.js';
 import { stageExistingAudio, stageExistingVideo } from './prefetch.js';
 
 interface SectionFavorites {
@@ -174,6 +175,7 @@ export function clipsRouter(): Router {
           const favRaw = field(body, 'is_favorite');
           const isFavorite = favRaw === '1' || favRaw === 'true' ? 1 : 0;
           const clipType = parseClipTypeField(field(body, 'clip_type'));
+          const videoOrientation = parseVideoOrientationField(body, clipType);
 
           if (!title) {
             throw new HttpError(400, 'Title is required.', 'missing_title');
@@ -204,6 +206,7 @@ export function clipsRouter(): Router {
             originalFilename: file.originalname ?? 'thumb.jpg',
             mimeType: file.mimetype,
             clipType,
+            videoOrientation,
           });
           res.status(201).json({ id, message: 'Clip created.' });
         } catch (err) {
@@ -283,6 +286,9 @@ export function clipsRouter(): Router {
         audio_fade: row.audio_fade,
         is_favorite: row.is_favorite,
         created_at: row.created_at,
+        video_width: row.video_width,
+        video_height: row.video_height,
+        video_orientation: row.video_orientation,
       });
     } catch (err) {
       next(err);
@@ -311,6 +317,7 @@ export function clipsRouter(): Router {
           const favRaw = field(body, 'is_favorite');
           const isFavorite = favRaw === '1' || favRaw === 'true' ? 1 : 0;
           const clipType = parseClipTypeField(field(body, 'clip_type'));
+          const videoOrientation = parseVideoOrientationField(body, clipType);
           const file = req.file;
 
           if (!title) {
@@ -342,6 +349,7 @@ export function clipsRouter(): Router {
             originalFilename: file?.originalname,
             mimeType: file?.mimetype,
             clipType,
+            videoOrientation,
           });
           res.json({ id, message: 'Clip updated.' });
         } catch (err) {
@@ -502,6 +510,24 @@ function parseTags(raw: string): string[] {
     .filter(Boolean);
 }
 
+function parseClipTypeField(raw: string): 'audio' | 'video' {
+  return raw === 'video' ? 'video' : 'audio';
+}
+
+function parseVideoOrientationField(
+  body: Record<string, unknown>,
+  clipType: 'audio' | 'video',
+): string | undefined {
+  if (clipType !== 'video') return undefined;
+  const raw = field(body, 'video_orientation');
+  if (!raw) return undefined;
+  const parsed = parseVideoOrientation(raw);
+  if (!parsed) {
+    throw new HttpError(400, 'Invalid video orientation.', 'invalid_video_orientation');
+  }
+  return parsed;
+}
+
 function isValidSourceUrl(value: string): boolean {
   if (!value) return false;
   if (isValidYoutubeUrl(value)) return true;
@@ -513,10 +539,6 @@ function isValidSourceUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function parseClipTypeField(raw: string): 'audio' | 'video' {
-  return raw === 'video' ? 'video' : 'audio';
 }
 
 function toDownloadFilename(title: string): string {

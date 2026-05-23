@@ -8,6 +8,7 @@ import { assertBinaries } from '../lib/binaries.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { playAudio, stopActivePlayback } from '../services/audioPlayer.js';
 import { publishBrowserSourceEvent } from '../services/browserSourceHub.js';
+import { parseVideoOrientation } from '../services/videoOrientation.js';
 import { cutToMp3 } from '../services/ffmpeg.js';
 import {
   isValidProcessId,
@@ -145,6 +146,9 @@ export function playRouter(paths: AppPaths): Router {
         publishBrowserSourceEvent({
           type: 'play',
           mediaUrl: `/api/clips/${id}/video`,
+          width: row.video_width ?? undefined,
+          height: row.video_height ?? undefined,
+          orientation: parseVideoOrientation(row.video_orientation) ?? undefined,
         });
         res.json({ status: 'playing', playback: 'browser_source' });
         return;

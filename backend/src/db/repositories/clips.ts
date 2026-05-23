@@ -14,6 +14,9 @@ export interface ClipRow {
   audio_path: string;
   clip_type: string;
   video_path: string | null;
+  video_width: number | null;
+  video_height: number | null;
+  video_orientation: string | null;
   volume: number;
   audio_normalize: number;
   audio_fade: number;

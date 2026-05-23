@@ -1,15 +1,36 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { getBrowserSourceEventsUrl } from '../lib/overlay';
+import { parseBrowserSourceMode } from '../lib/videoOrientation';
 
 interface BrowserSourcePlayEvent {
   type: 'play';
   mediaUrl: string;
+  width?: number;
+  height?: number;
+  orientation?: 'landscape' | 'portrait';
 }
 
 const FADE_MS = 400;
-/** Start fade this many seconds before the file ends (≈ fade duration + small buffer). */
 const FADE_OUT_LEAD_SEC = FADE_MS / 1000 + 0.1;
 
+function waitForVideoMetadata(video: HTMLVideoElement): Promise<void> {
+  return new Promise((resolve) => {
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      resolve();
+      return;
+    }
+    video.addEventListener('loadedmetadata', () => resolve(), { once: true });
+  });
+}
+
 export default function BrowserSourcePage() {
+  const [searchParams] = useSearchParams();
+  const mode = useMemo(
+    () => parseBrowserSourceMode(searchParams.get('mode')),
+    [searchParams],
+  );
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState('connecting');
@@ -82,10 +103,10 @@ export default function BrowserSourcePage() {
   }, []);
 
   useEffect(() => {
-    const source = new EventSource('/api/browser-source/events');
+    const source = new EventSource(getBrowserSourceEventsUrl(mode));
 
     source.onopen = () => {
-      setStatus('connected');
+      setStatus(`connected (${mode})`);
     };
 
     source.onmessage = (message) => {
@@ -106,25 +127,30 @@ export default function BrowserSourcePage() {
       setVisible(false);
       video.src = event.mediaUrl;
 
-      void video.play().then(() => {
-        attachEarlyFadeOutWatch(video);
-        requestAnimationFrame(() => {
-          setVisible(true);
-        });
-      }).catch(() => {
-        startFadeOut();
-      });
+      void (async () => {
+        try {
+          await waitForVideoMetadata(video);
+          video.currentTime = 0;
+          await video.play();
+          attachEarlyFadeOutWatch(video);
+          requestAnimationFrame(() => {
+            setVisible(true);
+          });
+        } catch {
+          startFadeOut();
+        }
+      })();
     };
 
     source.onerror = () => {
-      setStatus('reconnecting');
+      setStatus(`reconnecting (${mode})`);
     };
 
     return () => {
       source.close();
       detachEndWatch();
     };
-  }, []);
+  }, [mode]);
 
   const handleEnded = () => {
     if (!fadeOutStartedRef.current) {
@@ -132,27 +158,46 @@ export default function BrowserSourcePage() {
     }
   };
 
-  const handleTransitionEnd = (event: React.TransitionEvent<HTMLVideoElement>) => {
+  const handleTransitionEnd = (event: React.TransitionEvent<HTMLDivElement>) => {
     if (event.propertyName !== 'opacity') return;
     if (event.currentTarget.classList.contains('is-visible')) return;
     finishFadeOut();
   };
 
   return (
-    <div className="browser-source-stage">
-      <video
-        ref={videoRef}
-        className={visible ? 'browser-source-video is-visible' : 'browser-source-video'}
-        style={{ ['--browser-source-fade-duration' as string]: `${FADE_MS}ms` }}
-        playsInline
-        onEnded={handleEnded}
+    <div className={`browser-source-stage browser-source-mode-${mode}`}>
+      <MotionStageInner
+        className={visible ? 'browser-source-media is-visible' : 'browser-source-media'}
+        style={{
+          ['--browser-source-fade-duration' as string]: `${FADE_MS}ms`,
+        }}
         onTransitionEnd={handleTransitionEnd}
-      />
+      >
+        <video ref={videoRef} className="browser-source-video" playsInline onEnded={handleEnded} />
+      </MotionStageInner>
       {import.meta.env.DEV ? (
         <p className="browser-source-debug" aria-hidden="true">
           {status}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function MotionStageInner({
+  className,
+  style,
+  children,
+  onTransitionEnd,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+  children?: React.ReactNode;
+  onTransitionEnd?: (event: React.TransitionEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div className={className} style={style} onTransitionEnd={onTransitionEnd}>
+      {children}
     </div>
   );
 }

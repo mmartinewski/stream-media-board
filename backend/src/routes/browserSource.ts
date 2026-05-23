@@ -5,6 +5,7 @@ import type { AppPaths } from '../config/paths.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import {
   browserSourceClientCount,
+  browserSourceClientCountByMode,
   publishBrowserSourceEvent,
   subscribeBrowserSource,
 } from '../services/browserSourceHub.js';
@@ -15,15 +16,21 @@ export function browserSourceRouter(paths: AppPaths): Router {
   const router = Router();
 
   router.get('/events', (req: Request, res: Response) => {
-    subscribeBrowserSource(res);
+    subscribeBrowserSource(res, req.query.mode);
     req.socket.setTimeout(0);
   });
 
   router.get('/status', (_req, res) => {
     res.json({
       connected_clients: browserSourceClientCount(),
+      clients_by_mode: browserSourceClientCountByMode(),
       test_media_filename: TEST_MEDIA_FILENAME,
       overlay_path: '/overlay/browser',
+      overlay_paths: {
+        universal: '/overlay/browser?mode=universal',
+        landscape: '/overlay/browser?mode=landscape',
+        portrait: '/overlay/browser?mode=portrait',
+      },
     });
   });
 

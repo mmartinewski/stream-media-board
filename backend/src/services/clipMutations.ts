@@ -6,6 +6,10 @@ import { findOrCreateCategory } from '../db/repositories/categories.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { cutToMp3, cutToMp4 } from './ffmpeg.js';
 import {
+  probeVideoClipMetadata,
+  updateClipVideoMetadata,
+} from './videoClipMetadata.js';
+import {
   deleteStagingBundle,
   readStagingMeta,
   stagingInputPath,
@@ -36,6 +40,7 @@ export interface NewClipInput {
   originalFilename: string;
   mimeType: string | undefined;
   clipType: ClipType;
+  videoOrientation?: string;
 }
 
 function assertPathUnderDir(dir: string, filePath: string): void {
@@ -298,6 +303,9 @@ async function createVideoClipFromUpload(
   }
 
   deleteStagingBundle(paths.mediaTemp, input.processId);
+  const finalMp4 = join(paths.mediaVideo, `${clipId}.mp4`);
+  const metadata = await probeVideoClipMetadata(paths, finalMp4, input.videoOrientation);
+  updateClipVideoMetadata(db, clipId, metadata);
   return clipId;
 }
 
@@ -379,6 +387,7 @@ export interface UpdateClipInput {
   originalFilename?: string;
   mimeType?: string | undefined;
   clipType: ClipType;
+  videoOrientation?: string;
 }
 
 export async function updateClipFromUpload(
@@ -672,6 +681,9 @@ async function updateVideoClipFromUpload(
     input.isFavorite ? 1 : 0,
     clipId,
   );
+
+  const metadata = await probeVideoClipMetadata(paths, finalMp4, input.videoOrientation);
+  updateClipVideoMetadata(db, clipId, metadata);
 
   deleteStagingBundle(paths.mediaTemp, input.processId);
 }

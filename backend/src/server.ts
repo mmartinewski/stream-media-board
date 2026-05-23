@@ -7,6 +7,7 @@ import { migrate } from './db/migrate.js';
 import { closeDb, getDb } from './db/connection.js';
 import { cleanupExpiredStaging } from './services/stagingStore.js';
 import { stopActivePlayback } from './services/audioPlayer.js';
+import { backfillVideoClipMetadata } from './services/videoClipMetadata.js';
 
 export interface BackendServer {
   readonly paths: AppPaths;
@@ -31,6 +32,11 @@ export async function startBackendServer(): Promise<BackendServer> {
   const db = getDb(paths.databaseFile);
   migrate(db);
   logger.info('SQLite migrations applied');
+
+  const backfilled = await backfillVideoClipMetadata(db, paths);
+  if (backfilled > 0) {
+    logger.info(`video metadata backfill: updated ${backfilled} clip(s)`);
+  }
 
   const removed = cleanupExpiredStaging(paths.mediaTemp);
   if (removed > 0) {

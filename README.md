@@ -35,21 +35,29 @@ npm run fetch:bin
 
 Create **video** clips in the editor (YouTube link or a file from your PC). When you click a video clip on the dashboard, it appears in the browser source, plays, and fades out.
 
-### Overlay URL
+### Overlay URLs
 
-| Environment | URL |
+Use separate browser sources when you want different on-canvas layouts (e.g. full-width landscape + a portrait column). Add `?mode=` to the path:
+
+| Mode | URL suffix | Clips shown |
+| --- | --- | --- |
+| Universal | `?mode=universal` | All video clips |
+| Landscape | `?mode=landscape` | Landscape only |
+| Portrait | `?mode=portrait` | Portrait only |
+
+| Environment | Example (universal) |
 | --- | --- |
-| Development (`npm run dev`) | `http://localhost:5173/overlay/browser` |
-| Production / installed app | `http://localhost:3847/overlay/browser` |
-| LAN (phone or another PC) | `http://<streaming-PC-IP>:3847/overlay/browser` |
+| Development (`npm run dev`) | `http://localhost:5173/overlay/browser?mode=universal` |
+| Production / installed app | `http://localhost:3847/overlay/browser?mode=universal` |
+| LAN (phone or another PC) | `http://<streaming-PC-IP>:3847/overlay/browser?mode=universal` |
 
-The clip form shows the URL for your current session and a **Copy URL** button when **Video clip** is selected.
+The clip form lists all three URLs with **Copy** when **Video clip** is selected. Set **Video orientation** in the editor so clips route to the right source.
 
 ### OBS Studio (quick setup)
 
 1. Open the scene where the overlay should appear.
 2. **Sources** → **+** → **Browser**.
-3. Paste the overlay URL (table above).
+3. Paste an overlay URL with the desired `?mode=` (see table above).
 4. Set **Width** / **Height** to your canvas (e.g. 1920×1080).
 5. Optional: enable **Refresh browser when scene becomes active**.
 6. Save, then play a video clip from the dashboard to test.
@@ -58,7 +66,7 @@ The clip form shows the URL for your current session and a **Copy URL** button w
 
 1. Open your scene.
 2. **Sources** → **+** → **Browser Source**.
-3. Paste the same overlay URL.
+3. Paste an overlay URL with the desired `?mode=`.
 4. Match **Width** / **Height** to your output resolution.
 5. Confirm and test with a video clip from the dashboard.
 
