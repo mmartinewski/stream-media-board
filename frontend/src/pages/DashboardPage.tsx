@@ -1,6 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { api, type ClipDto, type ClipsResponse } from '../lib/api';
+
+type DashboardToastVariant = 'error' | 'success' | 'warning';
+
+interface DashboardToast {
+  message: string;
+  variant: DashboardToastVariant;
+}
+
+const TOAST_CLASS: Record<DashboardToastVariant, string> = {
+  error: 'border-red-500/50 bg-red-950/95 text-red-100',
+  success: 'border-emerald-500/50 bg-emerald-950/95 text-emerald-100',
+  warning: 'border-amber-500/50 bg-amber-950/95 text-amber-100',
+};
+
+const TOAST_DISMISS_MS = 4000;
 
 export default function DashboardPage() {
   const [clips, setClips] = useState<ClipsResponse | null>(null);
@@ -9,6 +25,9 @@ export default function DashboardPage() {
   const [cardErrors, setCardErrors] = useState<Record<number, string>>({});
   const [playingId, setPlayingId] = useState<number | null>(null);
   const [playPulse, setPlayPulse] = useState<{ id: number; token: number } | null>(null);
+  const [toast, setToast] = useState<DashboardToast | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [stoppingAll, setStoppingAll] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [favoriteId, setFavoriteId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
@@ -33,6 +52,33 @@ export default function DashboardPage() {
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const metadataTitleRef = useRef<HTMLInputElement>(null);
 
+  const showToast = useCallback((message: string, variant: DashboardToastVariant) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    setToast({ message, variant });
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, TOAST_DISMISS_MS);
+  }, []);
+
+  const dismissToast = useCallback(() => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToast(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const timer = window.setTimeout(() => {
@@ -56,7 +102,21 @@ export default function DashboardPage() {
     setClips(await api.getClips(search));
   };
 
-  const handlePlay = async (id: number) => {
+  const handleStopAll = async () => {
+    dismissToast();
+    setStoppingAll(true);
+    try {
+      await api.stop();
+      showToast('All overlays stopped.', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), 'error');
+    } finally {
+      setStoppingAll(false);
+    }
+  };
+
+  const handlePlay = async (clip: ClipDto) => {
+    const id = clip.id;
     const token = Date.now();
     setPlayPulse({ id, token });
     window.setTimeout(() => {
@@ -67,7 +127,19 @@ export default function DashboardPage() {
     setCardErrors((prev) => ({ ...prev, [id]: '' }));
     setPlayingId(id);
     try {
-      await api.playClip(id);
+      const result = await api.playClip(id);
+      if (
+        result.playback === 'browser_source' &&
+        (result.connected_clients ?? 0) === 0
+      ) {
+        setCardErrors((prev) => ({
+          ...prev,
+          [id]:
+            clip.clip_type === 'video'
+              ? 'No matching browser source — check landscape/portrait URL and clip orientation'
+              : 'No audio browser source — add ?mode=audio or universal in OBS',
+        }));
+      }
     } catch (err) {
       setCardErrors((prev) => ({
         ...prev,
@@ -358,12 +430,38 @@ export default function DashboardPage() {
     : clips.sections;
 
   return (
-    <section className="space-y-6">
-      <div className="sticky top-0 z-30 rounded-md border border-surface bg-bg/95 p-3 shadow-lg backdrop-blur">
+    <>
+      {toast
+        ? createPortal(
+            <div
+              role="alert"
+              className={
+                'pointer-events-auto fixed right-4 top-4 z-[100] max-w-md rounded-md border p-4 text-sm shadow-lg ' +
+                TOAST_CLASS[toast.variant]
+              }
+            >
+              <div className="flex gap-3">
+                <p className="flex-1">{toast.message}</p>
+                <button
+                  type="button"
+                  onClick={dismissToast}
+                  className="opacity-80 hover:opacity-100"
+                  aria-label="Close notification"
+                >
+                  ×
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      <section className="space-y-6">
+        <div className="sticky top-0 z-30 rounded-md border border-surface bg-bg/95 p-3 shadow-lg backdrop-blur">
         <label htmlFor="dashboard-search" className="block text-sm font-medium">
           Search clips
         </label>
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           <input
             id="dashboard-search"
             value={search}
@@ -371,6 +469,14 @@ export default function DashboardPage() {
             placeholder="Title, category, or tag..."
             className="min-w-0 flex-1 rounded-md border border-surface bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent"
           />
+          <button
+            type="button"
+            onClick={() => void handleStopAll()}
+            disabled={stoppingAll}
+            className="shrink-0 rounded-md border border-surface px-3 py-2 text-sm font-medium hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {stoppingAll ? 'Stopping...' : 'Stop all'}
+          </button>
           {search && (
             <button
               type="button"
@@ -538,7 +644,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       aria-label={`Play ${clip.title}`}
-                      onClick={() => void handlePlay(clip.id)}
+                      onClick={() => void handlePlay(clip)}
                       disabled={deletingId === clip.id}
                       className={
                         'absolute inset-0 flex items-center justify-center text-white transition duration-200 hover:bg-black/20 disabled:opacity-60 ' +
@@ -568,7 +674,7 @@ export default function DashboardPage() {
                     </p>
                     <p className="truncate text-xs text-text-muted">
                       {clip.category.name ?? '(uncategorized)'}
-                      {clip.clip_type === 'video' ? ' · Browser overlay' : ''}
+                      {' · Browser overlay'}
                     </p>
                   </div>
                   {cardErrors[clip.id] && (
@@ -819,6 +925,7 @@ export default function DashboardPage() {
         </div>
       )}
     </section>
+    </>
   );
 }
 

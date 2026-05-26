@@ -59,7 +59,7 @@ export async function backfillVideoClipMetadata(
 
   let updated = 0;
   for (const row of rows) {
-    if (row.video_width != null && row.video_orientation) continue;
+    if (row.video_orientation) continue;
     if (!existsSync(row.video_path)) continue;
     try {
       const { width, height } = await probeVideoDimensions(paths.ffprobeExe, row.video_path);

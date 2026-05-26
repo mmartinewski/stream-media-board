@@ -1,8 +1,8 @@
 export type VideoOrientation = 'landscape' | 'portrait';
-export type BrowserSourceMode = 'universal' | 'landscape' | 'portrait';
+export type BrowserSourceMode = 'universal' | 'audio' | 'landscape' | 'portrait';
 
 const ORIENTATION_SET = new Set<string>(['landscape', 'portrait']);
-const MODE_SET = new Set<string>(['universal', 'landscape', 'portrait']);
+const MODE_SET = new Set<string>(['universal', 'audio', 'landscape', 'portrait']);
 
 export function deriveVideoOrientation(
   width: number,
@@ -23,6 +23,27 @@ export function parseVideoOrientation(value: unknown): VideoOrientation | null {
   return ORIENTATION_SET.has(normalized) ? (normalized as VideoOrientation) : null;
 }
 
+/** Stored orientation, else dimensions, else landscape (legacy clips). */
+export function resolveClipVideoOrientation(
+  storedOrientation: unknown,
+  width?: number | null,
+  height?: number | null,
+): VideoOrientation {
+  const parsed = parseVideoOrientation(storedOrientation);
+  if (parsed) return parsed;
+  if (
+    width != null &&
+    height != null &&
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width > 0 &&
+    height > 0
+  ) {
+    return deriveVideoOrientation(width, height);
+  }
+  return 'landscape';
+}
+
 export function parseBrowserSourceMode(value: unknown): BrowserSourceMode {
   if (typeof value !== 'string') return 'universal';
   const normalized = value.trim().toLowerCase();
@@ -32,8 +53,13 @@ export function parseBrowserSourceMode(value: unknown): BrowserSourceMode {
 export function browserSourceModeAcceptsClip(
   mode: BrowserSourceMode,
   clipOrientation: VideoOrientation | null | undefined,
+  mediaKind?: 'audio' | 'video',
 ): boolean {
+  if (mediaKind === 'audio') {
+    return mode === 'audio' || mode === 'universal';
+  }
+  if (mode === 'audio') return false;
   if (mode === 'universal') return true;
-  if (!clipOrientation) return false;
-  return mode === clipOrientation;
+  const resolved = clipOrientation ?? 'landscape';
+  return mode === resolved;
 }

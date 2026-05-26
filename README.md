@@ -31,7 +31,7 @@ npm run fetch:bin
 
 ## Browser source (OBS Studio / Streamlabs)
 
-**Video clips** play on a transparent **browser overlay** in your streaming software—not through local `ffplay`. **Audio clips** still use local playback on the streaming PC.
+Video and audio clips play on a **transparent browser overlay** in your streaming software—not through local `ffplay`. Add at least one **Browser Source** in OBS or Streamlabs pointing at the overlay URL (see below).
 
 Create **video** clips in the editor (YouTube link or a file from your PC). When you click a video clip on the dashboard, it appears in the browser source, plays, and fades out.
 
@@ -41,17 +41,20 @@ Use separate browser sources when you want different on-canvas layouts (e.g. ful
 
 | Mode | URL suffix | Clips shown |
 | --- | --- | --- |
-| Universal | `?mode=universal` | All video clips |
-| Landscape | `?mode=landscape` | Landscape only |
-| Portrait | `?mode=portrait` | Portrait only |
+| **Audio** | `?mode=audio` | Audio clips only (soundboard) |
+| **Universal** | `?mode=universal` | Audio + all video clips |
+| **Landscape** | `?mode=landscape` | Landscape video only |
+| **Portrait** | `?mode=portrait` | Portrait video only |
 
-| Environment | Example (universal) |
+Recommended OBS setup: **`audio`** for the soundboard + **`landscape`** / **`portrait`** for video. Avoid **`universal`** if you already use orientation-specific video sources (otherwise videos play twice).
+
+| Environment | Example (audio) |
 | --- | --- |
-| Development (`npm run dev`) | `http://localhost:5173/overlay/browser?mode=universal` |
-| Production / installed app | `http://localhost:3847/overlay/browser?mode=universal` |
-| LAN (phone or another PC) | `http://<streaming-PC-IP>:3847/overlay/browser?mode=universal` |
+| Development (`npm run dev`) | `http://localhost:5173/overlay/browser?mode=audio` |
+| Production / installed app | `http://localhost:3847/overlay/browser?mode=audio` |
+| LAN (phone or another PC) | `http://<streaming-PC-IP>:3847/overlay/browser?mode=audio` |
 
-The clip form lists all three URLs with **Copy** when **Video clip** is selected. Set **Video orientation** in the editor so clips route to the right source.
+The clip form lists all overlay URLs with **Copy** when **Video clip** is selected. Set **Video orientation** in the editor so video clips route to the right source.
 
 ### OBS Studio (quick setup)
 

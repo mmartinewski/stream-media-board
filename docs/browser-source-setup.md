@@ -1,6 +1,6 @@
 # Browser source setup (OBS Studio & Streamlabs)
 
-Video clips from Personal Soundboard Player play on a **transparent web overlay**, not through local `ffplay`. Add one or more **Browser Source** entries in OBS Studio or Streamlabs Desktop, then trigger clips from the dashboard.
+Video and audio clips from Personal Soundboard Player play on a **transparent web overlay**, not through local `ffplay`. Add one or more **Browser Source** entries in OBS Studio or Streamlabs Desktop, then trigger clips from the dashboard.
 
 ## Overlay URLs
 
@@ -8,23 +8,26 @@ Append `?mode=` to choose which clips that source receives. Use the same host an
 
 | Mode | Query | Receives |
 | --- | --- | --- |
-| **Universal** | `?mode=universal` (default if omitted) | All video clips |
-| **Landscape** | `?mode=landscape` | Landscape clips only |
-| **Portrait** | `?mode=portrait` | Portrait clips only |
+| **Audio** | `?mode=audio` | Audio clips only (soundboard) |
+| **Universal** | `?mode=universal` (default if omitted) | Audio + all video clips |
+| **Landscape** | `?mode=landscape` | Landscape video only |
+| **Portrait** | `?mode=portrait` | Portrait video only |
 
-| Environment | Universal | Landscape | Portrait |
-| --- | --- | --- | --- |
-| Development (`npm run dev`) | `http://localhost:5173/overlay/browser?mode=universal` | `...?mode=landscape` | `...?mode=portrait` |
-| Production / installed app | `http://localhost:3847/overlay/browser?mode=universal` | `...?mode=landscape` | `...?mode=portrait` |
-| Another device on your LAN | `http://<streaming-PC-IP>:3847/overlay/browser?mode=...` | same | same |
+**Recommended setup:** one Browser Source with `?mode=audio` for the soundboard, plus `?mode=landscape` and `?mode=portrait` for video layouts. Do **not** add `universal` if you already use landscape/portrait for video — otherwise those videos play on universal **and** on the orientation source (duplicate).
+
+| Environment | Audio | Universal | Landscape | Portrait |
+| --- | --- | --- | --- | --- |
+| Development (`npm run dev`) | `http://localhost:5173/overlay/browser?mode=audio` | `...?mode=universal` | `...?mode=landscape` | `...?mode=portrait` |
+| Production / installed app | `http://localhost:3847/overlay/browser?mode=audio` | `...?mode=universal` | `...?mode=landscape` | `...?mode=portrait` |
+| Another device on your LAN | `http://<streaming-PC-IP>:3847/overlay/browser?mode=...` | same | same | same |
 
 In development, the Vite dev server (port **5173**) proxies API calls to the backend.
 
 **Square** (1:1) videos are treated as **landscape** for routing to browser sources.
 
-The clip form (**Video clip**) lists all three URLs with **Copy** buttons when you edit or create a video clip.
+The clip form (**Video clip**) lists all overlay URLs with **Copy** buttons when you edit or create a video clip.
 
-Each overlay listens for play events over SSE (`/api/browser-source/events?mode=...`). When you click a matching **video** clip on the dashboard, that source fades in, fills the browser source with `object-fit: cover` (no letterboxing), and fades out before the file ends.
+Each overlay listens for play events over SSE (`/api/browser-source/events?mode=...`). When you click a matching clip on the dashboard, that source plays it (video fades in/out; audio is invisible but audible).
 
 ---
 
@@ -84,8 +87,10 @@ When you load a YouTube or local video, the app probes width/height and suggests
 
 | Clip type | Playback |
 | --- | --- |
-| **Audio** | Local `ffplay` on the streaming PC (volume from clip settings). |
-| **Video** | Browser overlay in OBS / Streamlabs (triggered via dashboard, filtered by `?mode=`). |
+| **Audio** | Browser overlay with `?mode=audio` or `?mode=universal` |
+| **Video** | Browser overlay with `?mode=landscape`, `?mode=portrait`, or `?mode=universal` |
+
+Audio uses the clip volume from the editor (100 = normal). Route soundboard audio to a dedicated **`audio`** browser source (small 1×1 or hidden source is fine — only sound matters).
 
 ---
 

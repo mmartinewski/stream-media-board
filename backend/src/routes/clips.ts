@@ -232,7 +232,15 @@ export function clipsRouter(): Router {
         throw new HttpError(404, 'Audio file not found.', 'audio_missing');
       }
       res.setHeader('Content-Type', 'audio/mpeg');
-      res.download(row.audio_path, `${toDownloadFilename(row.title)}.mp3`);
+      const asDownload =
+        req.query.download === '1' ||
+        req.query.download === 'true' ||
+        String(req.query.download ?? '').toLowerCase() === 'yes';
+      if (asDownload) {
+        res.download(row.audio_path, `${toDownloadFilename(row.title)}.mp3`);
+        return;
+      }
+      res.sendFile(row.audio_path);
     } catch (err) {
       next(err);
     }

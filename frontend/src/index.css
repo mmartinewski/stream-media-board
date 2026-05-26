@@ -62,6 +62,14 @@ body.browser-source-root #root {
   background: transparent;
 }
 
+.browser-source-audio {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .browser-source-debug {
   position: fixed;
   left: 8px;

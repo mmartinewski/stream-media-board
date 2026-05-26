@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getBrowserSourceEventsUrl } from '../lib/overlay';
 import { parseBrowserSourceMode } from '../lib/videoOrientation';
@@ -6,10 +6,18 @@ import { parseBrowserSourceMode } from '../lib/videoOrientation';
 interface BrowserSourcePlayEvent {
   type: 'play';
   mediaUrl: string;
+  mediaKind?: 'audio' | 'video';
+  volume?: number;
   width?: number;
   height?: number;
   orientation?: 'landscape' | 'portrait';
 }
+
+interface BrowserSourceStopEvent {
+  type: 'stop';
+}
+
+type BrowserSourceSseEvent = BrowserSourcePlayEvent | BrowserSourceStopEvent;
 
 const FADE_MS = 400;
 const FADE_OUT_LEAD_SEC = FADE_MS / 1000 + 0.1;
@@ -24,6 +32,24 @@ function waitForVideoMetadata(video: HTMLVideoElement): Promise<void> {
   });
 }
 
+function resolveMediaUrl(mediaUrl: string): string {
+  if (/^https?:\/\//i.test(mediaUrl)) return mediaUrl;
+  const path = mediaUrl.startsWith('/') ? mediaUrl : `/${mediaUrl}`;
+  return `${window.location.origin}${path}`;
+}
+
+function isAudioPlayEvent(event: BrowserSourcePlayEvent): boolean {
+  if (event.mediaKind === 'audio') return true;
+  if (event.mediaKind === 'video') return false;
+  return /\/audio(?:\?|$)/i.test(event.mediaUrl);
+}
+
+function clipVolumeToElement(volume: number | undefined): number {
+  const value = volume ?? 100;
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(0, Math.min(1, value / 100));
+}
+
 export default function BrowserSourcePage() {
   const [searchParams] = useSearchParams();
   const mode = useMemo(
@@ -32,64 +58,158 @@ export default function BrowserSourcePage() {
   );
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const generationRef = useRef(0);
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState('connecting');
   const fadeOutFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeOutStartedRef = useRef(false);
   const detachEndWatchRef = useRef<(() => void) | null>(null);
 
-  const clearFadeOutFallback = () => {
+  const clearFadeOutFallback = useCallback(() => {
     if (fadeOutFallbackRef.current) {
       clearTimeout(fadeOutFallbackRef.current);
       fadeOutFallbackRef.current = null;
     }
-  };
+  }, []);
 
-  const detachEndWatch = () => {
+  const detachEndWatch = useCallback(() => {
     detachEndWatchRef.current?.();
     detachEndWatchRef.current = null;
-  };
+  }, []);
 
-  const attachEarlyFadeOutWatch = (video: HTMLVideoElement) => {
-    detachEndWatch();
-    fadeOutStartedRef.current = false;
-
-    const onTimeUpdate = () => {
-      const dur = video.duration;
-      if (!Number.isFinite(dur) || dur <= 0) return;
-      if (dur - video.currentTime > FADE_OUT_LEAD_SEC) return;
-      startFadeOut();
-    };
-
-    video.addEventListener('timeupdate', onTimeUpdate);
-    detachEndWatchRef.current = () => {
-      video.removeEventListener('timeupdate', onTimeUpdate);
-    };
-  };
-
-  const clearVideo = () => {
+  const clearVideo = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     video.pause();
     video.removeAttribute('src');
     video.load();
-  };
+  }, []);
 
-  const finishFadeOut = () => {
+  const clearAudio = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+  }, []);
+
+  const stopAllPlayback = useCallback(() => {
+    generationRef.current += 1;
+    clearFadeOutFallback();
+    detachEndWatch();
+    fadeOutStartedRef.current = false;
+    setVisible(false);
+    clearVideo();
+    clearAudio();
+  }, [clearAudio, clearFadeOutFallback, clearVideo, detachEndWatch]);
+
+  const finishFadeOut = useCallback(() => {
     clearFadeOutFallback();
     const video = videoRef.current;
     if (!video?.getAttribute('src')) return;
     clearVideo();
-  };
+  }, [clearFadeOutFallback, clearVideo]);
 
-  const startFadeOut = () => {
+  const startFadeOut = useCallback(() => {
     if (fadeOutStartedRef.current) return;
     fadeOutStartedRef.current = true;
     detachEndWatch();
     clearFadeOutFallback();
     setVisible(false);
     fadeOutFallbackRef.current = setTimeout(finishFadeOut, FADE_MS + 50);
-  };
+  }, [clearFadeOutFallback, detachEndWatch, finishFadeOut]);
+
+  const attachEarlyFadeOutWatch = useCallback(
+    (video: HTMLVideoElement) => {
+      detachEndWatch();
+      fadeOutStartedRef.current = false;
+
+      const onTimeUpdate = () => {
+        const dur = video.duration;
+        if (!Number.isFinite(dur) || dur <= 0) return;
+        if (dur - video.currentTime > FADE_OUT_LEAD_SEC) return;
+        startFadeOut();
+      };
+
+      video.addEventListener('timeupdate', onTimeUpdate);
+      detachEndWatchRef.current = () => {
+        video.removeEventListener('timeupdate', onTimeUpdate);
+      };
+    },
+    [detachEndWatch, startFadeOut],
+  );
+
+  const playVideoClip = useCallback(
+    async (event: BrowserSourcePlayEvent) => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      const gen = ++generationRef.current;
+      clearAudio();
+      clearFadeOutFallback();
+      detachEndWatch();
+      fadeOutStartedRef.current = false;
+      setVisible(false);
+      video.src = resolveMediaUrl(event.mediaUrl);
+
+      try {
+        await waitForVideoMetadata(video);
+        if (gen !== generationRef.current) return;
+        video.currentTime = 0;
+        await video.play();
+        if (gen !== generationRef.current) return;
+        attachEarlyFadeOutWatch(video);
+        requestAnimationFrame(() => {
+          if (gen !== generationRef.current) return;
+          setVisible(true);
+        });
+      } catch {
+        if (gen === generationRef.current) {
+          startFadeOut();
+        }
+      }
+    },
+    [
+      attachEarlyFadeOutWatch,
+      clearAudio,
+      clearFadeOutFallback,
+      detachEndWatch,
+      startFadeOut,
+    ],
+  );
+
+  const playAudioClip = useCallback(
+    async (event: BrowserSourcePlayEvent) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      const gen = ++generationRef.current;
+      clearVideo();
+      setVisible(false);
+      clearFadeOutFallback();
+      detachEndWatch();
+      fadeOutStartedRef.current = false;
+
+      audio.volume = clipVolumeToElement(event.volume);
+      audio.src = resolveMediaUrl(event.mediaUrl);
+
+      try {
+        audio.currentTime = 0;
+        await audio.play();
+        if (gen !== generationRef.current) {
+          audio.pause();
+          audio.removeAttribute('src');
+          audio.load();
+        }
+      } catch {
+        if (gen === generationRef.current) {
+          clearAudio();
+        }
+      }
+    },
+    [clearAudio, clearFadeOutFallback, clearVideo, detachEndWatch],
+  );
 
   useEffect(() => {
     document.documentElement.classList.add('browser-source-root');
@@ -100,7 +220,7 @@ export default function BrowserSourcePage() {
       clearFadeOutFallback();
       detachEndWatch();
     };
-  }, []);
+  }, [clearFadeOutFallback, detachEndWatch]);
 
   useEffect(() => {
     const source = new EventSource(getBrowserSourceEventsUrl(mode));
@@ -110,36 +230,26 @@ export default function BrowserSourcePage() {
     };
 
     source.onmessage = (message) => {
-      let event: BrowserSourcePlayEvent;
+      let event: BrowserSourceSseEvent;
       try {
-        event = JSON.parse(message.data) as BrowserSourcePlayEvent;
+        event = JSON.parse(message.data) as BrowserSourceSseEvent;
       } catch {
         return;
       }
+
+      if (event.type === 'stop') {
+        stopAllPlayback();
+        return;
+      }
+
       if (event.type !== 'play' || !event.mediaUrl) return;
 
-      const video = videoRef.current;
-      if (!video) return;
+      if (isAudioPlayEvent(event)) {
+        void playAudioClip(event);
+        return;
+      }
 
-      clearFadeOutFallback();
-      detachEndWatch();
-      fadeOutStartedRef.current = false;
-      setVisible(false);
-      video.src = event.mediaUrl;
-
-      void (async () => {
-        try {
-          await waitForVideoMetadata(video);
-          video.currentTime = 0;
-          await video.play();
-          attachEarlyFadeOutWatch(video);
-          requestAnimationFrame(() => {
-            setVisible(true);
-          });
-        } catch {
-          startFadeOut();
-        }
-      })();
+      void playVideoClip(event);
     };
 
     source.onerror = () => {
@@ -150,12 +260,16 @@ export default function BrowserSourcePage() {
       source.close();
       detachEndWatch();
     };
-  }, [mode]);
+  }, [mode, playAudioClip, playVideoClip, stopAllPlayback, detachEndWatch]);
 
-  const handleEnded = () => {
+  const handleVideoEnded = () => {
     if (!fadeOutStartedRef.current) {
       startFadeOut();
     }
+  };
+
+  const handleAudioEnded = () => {
+    clearAudio();
   };
 
   const handleTransitionEnd = (event: React.TransitionEvent<HTMLDivElement>) => {
@@ -166,6 +280,12 @@ export default function BrowserSourcePage() {
 
   return (
     <div className={`browser-source-stage browser-source-mode-${mode}`}>
+      <audio
+        ref={audioRef}
+        className="browser-source-audio"
+        preload="auto"
+        onEnded={handleAudioEnded}
+      />
       <MotionStageInner
         className={visible ? 'browser-source-media is-visible' : 'browser-source-media'}
         style={{
@@ -173,7 +293,12 @@ export default function BrowserSourcePage() {
         }}
         onTransitionEnd={handleTransitionEnd}
       >
-        <video ref={videoRef} className="browser-source-video" playsInline onEnded={handleEnded} />
+        <video
+          ref={videoRef}
+          className="browser-source-video"
+          playsInline
+          onEnded={handleVideoEnded}
+        />
       </MotionStageInner>
       {import.meta.env.DEV ? (
         <p className="browser-source-debug" aria-hidden="true">

@@ -28,6 +28,7 @@ export function browserSourceRouter(paths: AppPaths): Router {
       overlay_path: '/overlay/browser',
       overlay_paths: {
         universal: '/overlay/browser?mode=universal',
+        audio: '/overlay/browser?mode=audio',
         landscape: '/overlay/browser?mode=landscape',
         portrait: '/overlay/browser?mode=portrait',
       },

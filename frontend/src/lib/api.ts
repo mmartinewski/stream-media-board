@@ -34,6 +34,12 @@ export interface ClipsResponse {
 
 export type VideoOrientation = 'landscape' | 'portrait';
 
+export interface PlayClipResponse {
+  status: string;
+  playback: 'browser_source' | 'local';
+  connected_clients?: number;
+}
+
 export interface PrefetchResponse {
   process_id: string;
   duration_seconds: number;
@@ -144,7 +150,7 @@ export const api = {
       body: JSON.stringify({ playback_volume }),
     }),
   stop: () =>
-    request<{ status: 'stopped' }>('/api/clips/stop', { method: 'POST' }),
+    request<{ status: string; playback?: string }>('/api/clips/stop', { method: 'POST' }),
   prefetchYoutube: (youtube_url: string) =>
     request<PrefetchResponse>('/api/clips/prefetch/', {
       method: 'POST',
@@ -231,8 +237,8 @@ export const api = {
       body: form,
     }),
   playClip: (id: number) =>
-    request<{ status: string }>(`/api/clips/${id}/play`, { method: 'POST' }),
-  getClipAudioDownloadUrl: (id: number) => `/api/clips/${id}/audio`,
+    request<PlayClipResponse>(`/api/clips/${id}/play`, { method: 'POST' }),
+  getClipAudioDownloadUrl: (id: number) => `/api/clips/${id}/audio?download=1`,
   renameCategory: (id: number, name: string) =>
     request<{ id: number; name: string; message: string }>(`/api/categories/${id}`, {
       method: 'PATCH',

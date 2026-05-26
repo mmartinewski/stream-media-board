@@ -7,8 +7,12 @@ import { getClipById } from '../db/repositories/clips.js';
 import { assertBinaries } from '../lib/binaries.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { playAudio, stopActivePlayback } from '../services/audioPlayer.js';
-import { publishBrowserSourceEvent } from '../services/browserSourceHub.js';
-import { parseVideoOrientation } from '../services/videoOrientation.js';
+import {
+  publishBrowserSourceEvent,
+  publishBrowserSourceStopAll,
+  browserSourceClientsForEvent,
+} from '../services/browserSourceHub.js';
+import { resolveClipVideoOrientation } from '../services/videoOrientation.js';
 import { cutToMp3 } from '../services/ffmpeg.js';
 import {
   isValidProcessId,
@@ -28,7 +32,8 @@ export function playRouter(paths: AppPaths): Router {
 
   router.post('/stop', (_req, res) => {
     stopActivePlayback();
-    res.json({ status: 'stopped' });
+    publishBrowserSourceStopAll();
+    res.json({ status: 'stopped', playback: 'browser_source' });
   });
 
   router.post('/test-play', (req: Request, res: Response, next: NextFunction) => {
@@ -143,26 +148,44 @@ export function playRouter(paths: AppPaths): Router {
           throw new HttpError(404, 'Video file not found.', 'video_missing');
         }
         stopActivePlayback();
-        publishBrowserSourceEvent({
-          type: 'play',
+        publishBrowserSourceStopAll();
+        const playEvent = {
+          type: 'play' as const,
+          mediaKind: 'video' as const,
           mediaUrl: `/api/clips/${id}/video`,
           width: row.video_width ?? undefined,
           height: row.video_height ?? undefined,
-          orientation: parseVideoOrientation(row.video_orientation) ?? undefined,
+          orientation: resolveClipVideoOrientation(
+            row.video_orientation,
+            row.video_width,
+            row.video_height,
+          ),
+        };
+        publishBrowserSourceEvent(playEvent);
+        res.json({
+          status: 'playing',
+          playback: 'browser_source',
+          connected_clients: browserSourceClientsForEvent(playEvent),
         });
-        res.json({ status: 'playing', playback: 'browser_source' });
         return;
       }
       if (!existsSync(row.audio_path)) {
         throw new HttpError(404, 'Audio file not found.', 'audio_missing');
       }
       stopActivePlayback();
-      playAudio({
-        ffplayExe: paths.ffplayExe,
-        audioFile: row.audio_path,
+      publishBrowserSourceStopAll();
+      const playEvent = {
+        type: 'play' as const,
+        mediaKind: 'audio' as const,
+        mediaUrl: `/api/clips/${id}/audio`,
         volume: row.volume,
+      };
+      publishBrowserSourceEvent(playEvent);
+      res.json({
+        status: 'playing',
+        playback: 'browser_source',
+        connected_clients: browserSourceClientsForEvent(playEvent),
       });
-      res.json({ status: 'playing', playback: 'local' });
     } catch (err) {
       next(err);
     }

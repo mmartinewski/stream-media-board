@@ -3,18 +3,98 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api, type PrefetchResponse } from '../lib/api';
 import { getBrowserOverlayUrl } from '../lib/overlay';
 import type { VideoOrientation } from '../lib/api';
-import { normalizeVideoOrientation, videoOrientationLabel } from '../lib/videoOrientation';
+import { normalizeVideoOrientation, videoOrientationLabel, type BrowserSourceMode } from '../lib/videoOrientation';
 import VideoRangeTrimmer from '../components/VideoRangeTrimmer';
 import { isValidYoutubeUrl } from '../lib/youtube';
 import { isValidTimeString, secondsToTimeString, timeStringToSeconds } from '../lib/time';
 
-interface Props {
-  mode: 'create' | 'edit';
-}
-
 type AudioSourceType = 'youtube' | 'mp3-url' | 'local-file';
 type VideoSourceType = 'youtube' | 'local-file';
 type EditorKind = 'audio' | 'video';
+
+const BROWSER_SOURCE_MODES: ReadonlyArray<[BrowserSourceMode, string]> = [
+  ['audio', 'Audio (soundboard)'],
+  ['universal', 'Universal (audio + all videos)'],
+  ['landscape', 'Landscape video'],
+  ['portrait', 'Portrait video'],
+];
+
+function BrowserSourceInstructionsCard({
+  editorKind,
+  onCopyError,
+}: {
+  editorKind: EditorKind;
+  onCopyError?: (message: string) => void;
+}) {
+  const modes =
+    editorKind === 'audio'
+      ? BROWSER_SOURCE_MODES.filter(([mode]) => mode === 'audio' || mode === 'universal')
+      : BROWSER_SOURCE_MODES;
+
+  return (
+    <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-4">
+      <h3 className="text-sm font-medium text-sky-100">
+        OBS Studio / Streamlabs browser source
+      </h3>
+      <p className="mt-2 text-sm text-text-muted">
+        {editorKind === 'audio' ? (
+          <>
+            Audio clips play on a browser source in OBS / Streamlabs when you click them on the
+            dashboard — not through local PC speakers. Add a source with{' '}
+            <span className="font-medium text-text">?mode=audio</span> for the soundboard (or{' '}
+            <span className="font-medium text-text">universal</span> if you use a single overlay
+            for everything).
+          </>
+        ) : (
+          <>
+            Video clips play on browser sources in OBS / Streamlabs. Use{' '}
+            <span className="font-medium text-text">?mode=landscape</span> or{' '}
+            <span className="font-medium text-text">?mode=portrait</span> matching this clip&apos;s
+            orientation, plus <span className="font-medium text-text">?mode=audio</span> for
+            soundboard audio. Avoid <span className="font-medium text-text">universal</span> if you
+            already use orientation-specific video sources (videos would play twice).
+          </>
+        )}
+      </p>
+      <p className="mt-2 text-xs text-text-muted">Overlay URLs (copy the ones you need):</p>
+      <ul className="mt-2 space-y-2 text-xs text-text-muted">
+        {modes.map(([mode, label]) => (
+          <li key={mode} className="flex flex-wrap items-center gap-2">
+            <span className="min-w-[7rem] font-medium text-text">{label}</span>
+            <code className="min-w-0 flex-1 break-all rounded-md border border-surface bg-bg px-2 py-1 text-text">
+              {getBrowserOverlayUrl(mode)}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(getBrowserOverlayUrl(mode)).catch(() => {
+                  onCopyError?.('Could not copy the overlay URL to the clipboard.');
+                });
+              }}
+              className="shrink-0 rounded-md border border-surface bg-bg px-2 py-1 text-xs font-medium hover:border-accent"
+            >
+              Copy
+            </button>
+          </li>
+        ))}
+      </ul>
+      <ul className="mt-3 list-inside list-disc space-y-1 text-xs text-text-muted">
+        <li>
+          <span className="font-medium text-text">OBS Studio:</span> Sources → + → Browser → paste
+          URL → set size (video: canvas; audio: small/hidden source is fine).
+        </li>
+        <li>
+          <span className="font-medium text-text">Streamlabs:</span> Sources → + → Browser Source →
+          paste URL.
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+interface Props {
+  mode: 'create' | 'edit';
+}
 
 interface CropRect {
   x: number;
@@ -1232,7 +1312,7 @@ export default function ClipFormPage({ mode }: Props) {
         <p className="text-sm text-text-muted">
           {editorKind === 'video'
             ? 'Load a YouTube link or a video from your computer, choose the segment (max. 30s), and save for browser overlay playback.'
-            : 'Download the audio, choose the segment (max. 30s), adjust the thumbnail, and save.'}
+            : 'Load the audio, choose the segment (max. 30s), adjust the thumbnail, and save for browser overlay playback.'}
         </p>
       </header>
 
@@ -1269,56 +1349,10 @@ export default function ClipFormPage({ mode }: Props) {
           </p>
         ) : null}
 
-        {editorKind === 'video' ? (
-          <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-4">
-            <h3 className="text-sm font-medium text-sky-100">
-              OBS Studio / Streamlabs browser source
-            </h3>
-            <p className="mt-2 text-sm text-text-muted">
-              Video clips are not played with local audio output. When you click a video clip on
-              the dashboard, it is shown on the transparent browser overlay in OBS Studio or
-              Streamlabs Desktop (browser source).
-            </p>
-            <p className="mt-2 text-xs text-text-muted">
-              Use separate browser sources for landscape, portrait, or any orientation:
-            </p>
-            <ul className="mt-2 space-y-2 text-xs text-text-muted">
-              {([
-                ['universal', 'Universal (any clip)'],
-                ['landscape', 'Landscape only'],
-                ['portrait', 'Portrait only'],
-              ] as const).map(([mode, label]) => (
-                <li key={mode} className="flex flex-wrap items-center gap-2">
-                  <span className="min-w-[7rem] font-medium text-text">{label}</span>
-                  <code className="min-w-0 flex-1 break-all rounded-md border border-surface bg-bg px-2 py-1 text-text">
-                    {getBrowserOverlayUrl(mode)}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(getBrowserOverlayUrl(mode)).catch(() => {
-                        setError('Could not copy the overlay URL to the clipboard.');
-                      });
-                    }}
-                    className="shrink-0 rounded-md border border-surface bg-bg px-2 py-1 text-xs font-medium hover:border-accent"
-                  >
-                    Copy
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <ul className="mt-3 list-inside list-disc space-y-1 text-xs text-text-muted">
-              <li>
-                <span className="font-medium text-text">OBS Studio:</span> Sources → + → Browser
-                → paste URL → set size to your canvas (e.g. 1920×1080).
-              </li>
-              <li>
-                <span className="font-medium text-text">Streamlabs:</span> Sources → + → Browser
-                Source → paste URL → same canvas size.
-              </li>
-            </ul>
-          </div>
-        ) : null}
+        <BrowserSourceInstructionsCard
+          editorKind={editorKind}
+          onCopyError={(message) => setError(message)}
+        />
 
         <div className="rounded-md border border-surface bg-surface-soft p-4">
           <h3 className="text-sm font-medium">
