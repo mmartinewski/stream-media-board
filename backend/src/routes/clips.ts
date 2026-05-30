@@ -386,6 +386,26 @@ export function clipsRouter(): Router {
     }
   });
 
+  router.patch('/:id/volume', (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = parseClipId(req.params.id);
+      const db = getDb(paths.databaseFile);
+      const row = getClipById(db, id);
+      if (!row) {
+        throw new HttpError(404, 'Clip not found.', 'clip_not_found');
+      }
+      const body = (req.body ?? {}) as { volume?: unknown };
+      if (typeof body.volume !== 'number' && typeof body.volume !== 'string') {
+        throw new HttpError(400, 'Invalid volume (0 to 300).', 'invalid_volume');
+      }
+      const volume = parseVolume(String(body.volume));
+      db.prepare('UPDATE clips SET volume = ? WHERE id = ?').run(volume, id);
+      res.json({ id, volume });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.patch('/:id/favorite', (req: Request, res: Response, next: NextFunction) => {
     try {
       const id = parseClipId(req.params.id);

@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getBrowserSourceEventsUrl } from '../lib/overlay';
 import { parseBrowserSourceMode } from '../lib/videoOrientation';
+import { effectiveVolumeToElement } from '../lib/volume';
 
 interface BrowserSourcePlayEvent {
   type: 'play';
   mediaUrl: string;
   mediaKind?: 'audio' | 'video';
   volume?: number;
+  playbackVolume?: number;
   width?: number;
   height?: number;
   orientation?: 'landscape' | 'portrait';
@@ -42,12 +44,6 @@ function isAudioPlayEvent(event: BrowserSourcePlayEvent): boolean {
   if (event.mediaKind === 'audio') return true;
   if (event.mediaKind === 'video') return false;
   return /\/audio(?:\?|$)/i.test(event.mediaUrl);
-}
-
-function clipVolumeToElement(volume: number | undefined): number {
-  const value = volume ?? 100;
-  if (!Number.isFinite(value)) return 1;
-  return Math.max(0, Math.min(1, value / 100));
 }
 
 export default function BrowserSourcePage() {
@@ -151,6 +147,7 @@ export default function BrowserSourcePage() {
       detachEndWatch();
       fadeOutStartedRef.current = false;
       setVisible(false);
+      video.volume = effectiveVolumeToElement(event.volume, event.playbackVolume);
       video.src = resolveMediaUrl(event.mediaUrl);
 
       try {
@@ -191,7 +188,7 @@ export default function BrowserSourcePage() {
       detachEndWatch();
       fadeOutStartedRef.current = false;
 
-      audio.volume = clipVolumeToElement(event.volume);
+      audio.volume = effectiveVolumeToElement(event.volume, event.playbackVolume);
       audio.src = resolveMediaUrl(event.mediaUrl);
 
       try {

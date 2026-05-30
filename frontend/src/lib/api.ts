@@ -260,6 +260,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_favorite }),
     }),
+  updateClipVolume: (id: number, volume: number) =>
+    request<{ id: number; volume: number }>(`/api/clips/${id}/volume`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ volume }),
+    }),
   deleteClip: (id: number) =>
     request<{ status: 'deleted'; id: number }>(`/api/clips/${id}`, {
       method: 'DELETE',

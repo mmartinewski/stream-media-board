@@ -11,6 +11,7 @@ export interface BrowserSourcePlayEvent {
   mediaUrl: string;
   mediaKind?: 'audio' | 'video';
   volume?: number;
+  playbackVolume?: number;
   width?: number;
   height?: number;
   orientation?: VideoOrientation;

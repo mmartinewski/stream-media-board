@@ -827,9 +827,9 @@ export default function ClipFormPage({ mode }: Props) {
         setCategory(c.category.name ?? '');
         setTags(parseTags(c.tags ?? ''));
         setIsFavorite(c.is_favorite === 1);
-        setVolume(c.volume);
-        setSourceReference(c.youtube_url);
         const isVideoClip = c.clip_type === 'video';
+        setVolume(isVideoClip ? Math.min(100, c.volume) : c.volume);
+        setSourceReference(c.youtube_url);
         setEditorKind(isVideoClip ? 'video' : 'audio');
         if (isVideoClip) {
           if (isValidYoutubeUrl(c.youtube_url)) {
@@ -1605,7 +1605,6 @@ export default function ClipFormPage({ mode }: Props) {
               onEndChange={setEndTime}
             />
           )}
-          {editorKind === 'audio' ? (
           <div className="sm:col-span-2">
             <label htmlFor="volume" className="block text-sm font-medium">
               Volume: {volume}
@@ -1615,7 +1614,7 @@ export default function ClipFormPage({ mode }: Props) {
                 id="volume"
                 type="range"
                 min={0}
-                max={300}
+                max={editorKind === 'audio' ? 300 : 100}
                 value={volume}
                 onChange={(e) => setVolume(Number(e.target.value))}
                 className="w-full accent-accent"
@@ -1623,27 +1622,30 @@ export default function ClipFormPage({ mode }: Props) {
               <input
                 type="number"
                 min={0}
-                max={300}
+                max={editorKind === 'audio' ? 300 : 100}
                 value={volume}
                 onChange={(e) => {
                   const next = Number(e.target.value);
                   if (!Number.isFinite(next)) return;
-                  setVolume(Math.max(0, Math.min(300, Math.round(next))));
+                  const max = editorKind === 'audio' ? 300 : 100;
+                  setVolume(Math.max(0, Math.min(max, Math.round(next))));
                 }}
                 className="w-20 rounded-md border border-surface bg-bg px-2 py-1 text-sm outline-none focus:border-accent"
                 aria-label="Clip volume"
               />
             </div>
             <p className="mt-1 text-xs text-text-muted">
-              100 is neutral volume; use up to 300 to boost quieter clips.
+              {editorKind === 'audio'
+                ? '100 is neutral volume; use up to 300 to boost quieter clips.'
+                : '100 is normal volume in the browser source (maximum).'}
             </p>
           </div>
-          ) : (
+          {editorKind === 'video' ? (
             <p className="sm:col-span-2 text-xs text-text-muted">
               The player shows the start of the trim. Preview encodes the segment with FFmpeg
               (same as save) so playback matches the cut. Saving writes the final MP4 for OBS.
             </p>
-          )}
+          ) : null}
           {editorKind === 'video' ? (
             <p className="sm:col-span-2">
               <label htmlFor="video-orientation" className="block text-sm font-medium">

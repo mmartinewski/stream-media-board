@@ -4,6 +4,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import type { AppPaths } from '../config/paths.js';
 import { getDb } from '../db/connection.js';
 import { getClipById } from '../db/repositories/clips.js';
+import { getPlaybackVolume } from '../db/repositories/settings.js';
 import { assertBinaries } from '../lib/binaries.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { playAudio, stopActivePlayback } from '../services/audioPlayer.js';
@@ -143,6 +144,7 @@ export function playRouter(paths: AppPaths): Router {
       if (!row) {
         throw new HttpError(404, 'Clip not found.', 'clip_not_found');
       }
+      const playbackVolume = getPlaybackVolume(db);
       if (row.clip_type === 'video') {
         if (!row.video_path || !existsSync(row.video_path)) {
           throw new HttpError(404, 'Video file not found.', 'video_missing');
@@ -153,6 +155,8 @@ export function playRouter(paths: AppPaths): Router {
           type: 'play' as const,
           mediaKind: 'video' as const,
           mediaUrl: `/api/clips/${id}/video`,
+          volume: row.volume,
+          playbackVolume,
           width: row.video_width ?? undefined,
           height: row.video_height ?? undefined,
           orientation: resolveClipVideoOrientation(
@@ -179,6 +183,7 @@ export function playRouter(paths: AppPaths): Router {
         mediaKind: 'audio' as const,
         mediaUrl: `/api/clips/${id}/audio`,
         volume: row.volume,
+        playbackVolume,
       };
       publishBrowserSourceEvent(playEvent);
       res.json({

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { api, type ClipDto, type ClipsResponse } from '../lib/api';
+import { clampClipVolume, clipVolumeMax } from '../lib/volume';
 
 type DashboardToastVariant = 'error' | 'success' | 'warning';
 
@@ -17,6 +18,7 @@ const TOAST_CLASS: Record<DashboardToastVariant, string> = {
 };
 
 const TOAST_DISMISS_MS = 4000;
+const VOLUME_SAVE_DEBOUNCE_MS = 400;
 
 export default function DashboardPage() {
   const [clips, setClips] = useState<ClipsResponse | null>(null);
@@ -51,6 +53,11 @@ export default function DashboardPage() {
   const [metadataSaving, setMetadataSaving] = useState(false);
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const metadataTitleRef = useRef<HTMLInputElement>(null);
+  const [playbackVolume, setPlaybackVolume] = useState(75);
+  const [globalVolumeSaving, setGlobalVolumeSaving] = useState(false);
+  const [volumeSavingId, setVolumeSavingId] = useState<number | null>(null);
+  const globalVolumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clipVolumeTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
   const showToast = useCallback((message: string, variant: DashboardToastVariant) => {
     if (toastTimerRef.current) {
@@ -76,6 +83,12 @@ export default function DashboardPage() {
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
       }
+      if (globalVolumeTimerRef.current) {
+        clearTimeout(globalVolumeTimerRef.current);
+      }
+      for (const timer of clipVolumeTimersRef.current.values()) {
+        clearTimeout(timer);
+      }
     };
   }, []);
 
@@ -85,7 +98,10 @@ export default function DashboardPage() {
       api
         .getClips(search)
         .then((c) => {
-          if (!cancelled) setClips(c);
+          if (!cancelled) {
+            setClips(c);
+            setPlaybackVolume(c.playback_volume);
+          }
         })
         .catch((err: unknown) => {
           if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -99,7 +115,78 @@ export default function DashboardPage() {
   }, [search]);
 
   const reloadClips = async () => {
-    setClips(await api.getClips(search));
+    const next = await api.getClips(search);
+    setClips(next);
+    setPlaybackVolume(next.playback_volume);
+  };
+
+  const updateClipVolumeInState = useCallback((clipId: number, volume: number) => {
+    setClips((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        sections: prev.sections.map((section) => ({
+          ...section,
+          clips: section.clips.map((clip) =>
+            clip.id === clipId ? { ...clip, volume } : clip,
+          ),
+        })),
+      };
+    });
+  }, []);
+
+  const handleGlobalVolumeChange = (value: number) => {
+    const safe = Math.max(0, Math.min(100, Math.round(value)));
+    setPlaybackVolume(safe);
+    if (globalVolumeTimerRef.current) {
+      clearTimeout(globalVolumeTimerRef.current);
+    }
+    globalVolumeTimerRef.current = setTimeout(() => {
+      void (async () => {
+        setGlobalVolumeSaving(true);
+        try {
+          const saved = await api.setVolume(safe);
+          setPlaybackVolume(saved.playback_volume);
+          setClips((prev) =>
+            prev ? { ...prev, playback_volume: saved.playback_volume } : prev,
+          );
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : String(err), 'error');
+          setClips((prev) => {
+            if (prev) setPlaybackVolume(prev.playback_volume);
+            return prev;
+          });
+        } finally {
+          setGlobalVolumeSaving(false);
+        }
+      })();
+    }, VOLUME_SAVE_DEBOUNCE_MS);
+  };
+
+  const handleClipVolumeChange = (clip: ClipDto, raw: number) => {
+    const volume = clampClipVolume(raw, clip.clip_type);
+    updateClipVolumeInState(clip.id, volume);
+
+    const existing = clipVolumeTimersRef.current.get(clip.id);
+    if (existing) clearTimeout(existing);
+
+    clipVolumeTimersRef.current.set(
+      clip.id,
+      setTimeout(() => {
+        clipVolumeTimersRef.current.delete(clip.id);
+        void (async () => {
+          setVolumeSavingId(clip.id);
+          try {
+            await api.updateClipVolume(clip.id, volume);
+          } catch (err) {
+            showToast(err instanceof Error ? err.message : String(err), 'error');
+            await reloadClips();
+          } finally {
+            setVolumeSavingId((current) => (current === clip.id ? null : current));
+          }
+        })();
+      }, VOLUME_SAVE_DEBOUNCE_MS),
+    );
   };
 
   const handleStopAll = async () => {
@@ -487,6 +574,29 @@ export default function DashboardPage() {
             </button>
           )}
         </div>
+        <div className="mt-3 border-t border-surface/50 pt-3">
+          <label
+            htmlFor="global-playback-volume"
+            className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium"
+          >
+            <span>Global volume</span>
+            <span className="text-xs font-normal text-text-muted">
+              {globalVolumeSaving ? 'Saving…' : `${playbackVolume}%`}
+            </span>
+          </label>
+          <input
+            id="global-playback-volume"
+            type="range"
+            min={0}
+            max={100}
+            value={playbackVolume}
+            onChange={(e) => handleGlobalVolumeChange(Number(e.target.value))}
+            className="mt-1 w-full accent-accent"
+          />
+          <p className="mt-1 text-xs text-text-muted">
+            Applied on top of each clip&apos;s volume when playing in OBS.
+          </p>
+        </div>
       </div>
 
       {sections.map((section, idx) => (
@@ -676,6 +786,30 @@ export default function DashboardPage() {
                       {clip.category.name ?? '(uncategorized)'}
                       {' · Browser overlay'}
                     </p>
+                    <div className="mt-2">
+                      <label
+                        htmlFor={`clip-volume-${clip.id}`}
+                        className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-text-muted"
+                      >
+                        <span>Volume</span>
+                        <span>
+                          {volumeSavingId === clip.id ? 'Saving…' : clip.volume}
+                        </span>
+                      </label>
+                      <input
+                        id={`clip-volume-${clip.id}`}
+                        type="range"
+                        min={0}
+                        max={clipVolumeMax(clip.clip_type)}
+                        value={Math.min(clip.volume, clipVolumeMax(clip.clip_type))}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) =>
+                          handleClipVolumeChange(clip, Number(e.target.value))
+                        }
+                        className="mt-1 w-full accent-accent"
+                        aria-label={`Volume for ${clip.title}`}
+                      />
+                    </div>
                   </div>
                   {cardErrors[clip.id] && (
                     <div className="border-t border-red-500/30 bg-red-500/10 p-2 text-xs text-red-200">
