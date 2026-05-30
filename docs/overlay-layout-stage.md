@@ -1,6 +1,6 @@
 # Overlay Layout Stage — Technical Specification
 
-**Status:** Early implementation shipped in **v0.8.0** — core stage mode, areas CRUD, and dashboard play; visual editor and per-clip defaults still planned.  
+**Status:** **v0.8.0+** — stage mode, areas CRUD, dashboard play, and visual layout editor (Phase C). Per-clip defaults (Phase D) still planned.  
 **Audience:** Implementers and reviewers.  
 **Related:** [browser-source-setup.md](./browser-source-setup.md) (current OBS workflow), [technical-specification.md](./technical-specification.md) (v1 app overview).
 
@@ -774,10 +774,10 @@ Examples of **zero capable clients**:
 
 ### Phase C — Visual editor
 
-- [ ] `LayoutAreasPage` with 16:9 preview and 3×3 anchor picker
-- [ ] **Display defaults** section: landscape / portrait area dropdowns + dual-aspect preview
-- [ ] AppShell navigation entry
-- [ ] Optional: `POST /api/layout-areas/restore-defaults`
+- [x] `LayoutAreasPage` with 16:9 preview and 3×3 anchor picker
+- [x] **Display defaults** section: landscape / portrait area dropdowns + dual-aspect preview
+- [x] AppShell navigation entry
+- [x] Optional: `POST /api/layout-areas/restore-defaults`
 
 ### Phase D — Defaults and deprecation
 

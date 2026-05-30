@@ -1,9 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import AnchorPicker from '../components/layout/AnchorPicker';
+import LayoutStagePreview, {
+  type LayoutPreviewSlot,
+} from '../components/layout/LayoutStagePreview';
+import MarginSliders from '../components/layout/MarginSliders';
 import { api, type LayoutAreaDto, type LayoutSettingsResponse } from '../lib/api';
+import {
+  LAYOUT_PREVIEW_ASPECTS,
+  toPreviewLayoutArea,
+} from '../lib/layoutSlot';
 import { getBrowserOverlayUrl } from '../lib/overlay';
 
-const EMPTY_FORM: Omit<LayoutAreaDto, 'id' | 'created_at'> = {
+type AreaForm = Omit<LayoutAreaDto, 'id' | 'created_at'>;
+
+const EMPTY_FORM: AreaForm = {
   name: '',
   sort_order: 0,
   anchor_vertical: 'top',
@@ -17,13 +28,19 @@ const EMPTY_FORM: Omit<LayoutAreaDto, 'id' | 'created_at'> = {
   is_fullscreen: 0,
 };
 
+function findArea(areas: LayoutAreaDto[], id: number | null | undefined): LayoutAreaDto | null {
+  if (id == null) return null;
+  return areas.find((a) => a.id === id) ?? null;
+}
+
 export default function LayoutAreasPage() {
   const [areas, setAreas] = useState<LayoutAreaDto[]>([]);
   const [settings, setSettings] = useState<LayoutSettingsResponse | null>(null);
   const [editingId, setEditingId] = useState<number | 'new' | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState<AreaForm>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [reorderingId, setReorderingId] = useState<number | null>(null);
 
   const reload = useCallback(async () => {
     const [areasRes, settingsRes] = await Promise.all([
@@ -40,9 +57,57 @@ export default function LayoutAreasPage() {
     });
   }, [reload]);
 
+  const previewArea = useMemo(
+    () => toPreviewLayoutArea({ ...form, id: typeof editingId === 'number' ? editingId : 0 }),
+    [form, editingId],
+  );
+
+  const editPreviewSlots: LayoutPreviewSlot[] = useMemo(
+    () => [
+      {
+        area: previewArea,
+        ...LAYOUT_PREVIEW_ASPECTS.landscape,
+        variant: 'edit-landscape',
+        label: `16:9 · ${form.name || 'Area'}`,
+      },
+      {
+        area: previewArea,
+        ...LAYOUT_PREVIEW_ASPECTS.portrait,
+        variant: 'edit-portrait',
+        label: `9:16 · ${form.name || 'Area'}`,
+      },
+    ],
+    [previewArea, form.name],
+  );
+
+  const mappingPreviewSlots: LayoutPreviewSlot[] = useMemo(() => {
+    if (!settings) return [];
+    const landscapeArea = findArea(areas, settings.layout_area_id_landscape);
+    const portraitArea = findArea(areas, settings.layout_area_id_portrait);
+    const slots: LayoutPreviewSlot[] = [];
+    if (landscapeArea) {
+      slots.push({
+        area: landscapeArea,
+        ...LAYOUT_PREVIEW_ASPECTS.landscape,
+        variant: 'map-landscape',
+        label: `Landscape → ${landscapeArea.name}`,
+      });
+    }
+    if (portraitArea) {
+      slots.push({
+        area: portraitArea,
+        ...LAYOUT_PREVIEW_ASPECTS.portrait,
+        variant: 'map-portrait',
+        label: `Portrait → ${portraitArea.name}`,
+      });
+    }
+    return slots;
+  }, [areas, settings]);
+
   const startNew = () => {
+    const maxOrder = areas.reduce((m, a) => Math.max(m, a.sort_order), 0);
     setEditingId('new');
-    setForm({ ...EMPTY_FORM, name: 'New area' });
+    setForm({ ...EMPTY_FORM, name: 'New area', sort_order: maxOrder + 10 });
     setError(null);
   };
 
@@ -94,6 +159,44 @@ export default function LayoutAreasPage() {
     }
   };
 
+  const moveArea = async (id: number, direction: 'up' | 'down') => {
+    const index = areas.findIndex((a) => a.id === id);
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || swapIndex < 0 || swapIndex >= areas.length) return;
+
+    const current = areas[index];
+    const other = areas[swapIndex];
+    if (!current || !other) return;
+
+    const toPayload = (area: LayoutAreaDto, sort_order: number) => ({
+      name: area.name,
+      sort_order,
+      anchor_vertical: area.anchor_vertical,
+      anchor_horizontal: area.anchor_horizontal,
+      margin_top: area.margin_top,
+      margin_right: area.margin_right,
+      margin_bottom: area.margin_bottom,
+      margin_left: area.margin_left,
+      max_width_percent: area.max_width_percent,
+      max_height_percent: area.max_height_percent,
+      is_fullscreen: area.is_fullscreen,
+    });
+
+    setReorderingId(id);
+    setError(null);
+    try {
+      await Promise.all([
+        api.updateLayoutArea(current.id, toPayload(current, other.sort_order)),
+        api.updateLayoutArea(other.id, toPayload(other, current.sort_order)),
+      ]);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setReorderingId(null);
+    }
+  };
+
   const saveSettings = async () => {
     if (!settings) return;
     setSaving(true);
@@ -112,14 +215,15 @@ export default function LayoutAreasPage() {
   };
 
   const stageUrl = getBrowserOverlayUrl('stage');
+  const formDisabled = form.is_fullscreen === 1;
 
   return (
     <section className="space-y-8">
       <div>
         <h1 className="text-xl font-semibold">Layout areas</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Configure where video clips appear on the OBS stage overlay. Use{' '}
-          <code className="rounded bg-surface px-1">?mode=stage</code> in OBS.
+          Position video clips on the OBS stage overlay. Use a single browser source with{' '}
+          <code className="rounded bg-surface px-1">?mode=stage</code> at your stream resolution.
         </p>
         <p className="mt-2 break-all text-xs text-text-muted">{stageUrl}</p>
       </div>
@@ -134,62 +238,83 @@ export default function LayoutAreasPage() {
         <div className="rounded-md border border-surface bg-surface-soft p-4">
           <h2 className="text-base font-semibold">Display defaults by orientation</h2>
           <p className="mt-1 text-xs text-text-muted">
-            Used when playing a clip unless you pick another area on the dashboard.
+            Default layout area when you play a clip from the dashboard (unless you override per
+            card).
           </p>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="font-medium">Landscape clips</span>
-              <select
-                className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2 text-sm"
-                value={settings.layout_area_id_landscape ?? ''}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    layout_area_id_landscape: e.target.value
-                      ? Number(e.target.value)
-                      : null,
-                  })
-                }
+
+          <div className="mt-4 grid gap-6 lg:grid-cols-2 lg:items-start">
+            <div className="space-y-4">
+              <label className="block text-sm">
+                <span className="font-medium">Landscape clips</span>
+                <select
+                  className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2 text-sm"
+                  value={settings.layout_area_id_landscape ?? ''}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      layout_area_id_landscape: e.target.value
+                        ? Number(e.target.value)
+                        : null,
+                    })
+                  }
+                >
+                  <option value="">—</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="font-medium">Portrait clips</span>
+                <select
+                  className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2 text-sm"
+                  value={settings.layout_area_id_portrait ?? ''}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      layout_area_id_portrait: e.target.value
+                        ? Number(e.target.value)
+                        : null,
+                    })
+                  }
+                >
+                  <option value="">—</option>
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void saveSettings()}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-bg disabled:opacity-50"
               >
-                <option value="">—</option>
-                {areas.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm">
-              <span className="font-medium">Portrait clips</span>
-              <select
-                className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2 text-sm"
-                value={settings.layout_area_id_portrait ?? ''}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    layout_area_id_portrait: e.target.value
-                      ? Number(e.target.value)
-                      : null,
-                  })
-                }
-              >
-                <option value="">—</option>
-                {areas.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                Save display defaults
+              </button>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+                Mapping preview
+              </p>
+              {mappingPreviewSlots.length > 0 ? (
+                <LayoutStagePreview slots={mappingPreviewSlots} />
+              ) : (
+                <p className="text-sm text-text-muted">
+                  Select landscape and portrait areas to preview both slots on the stage.
+                </p>
+              )}
+              <p className="mt-2 text-xs text-text-muted">
+                <span className="text-sky-300">Blue</span> = 16:9 landscape clip ·{' '}
+                <span className="text-violet-300">Purple</span> = 9:16 portrait clip
+              </p>
+            </div>
           </div>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void saveSettings()}
-            className="mt-4 rounded-md bg-accent px-4 py-2 text-sm font-medium text-bg disabled:opacity-50"
-          >
-            Save display defaults
-          </button>
         </div>
       ) : null}
 
@@ -227,43 +352,64 @@ export default function LayoutAreasPage() {
         </Link>
       </div>
 
-      <ul className="space-y-2">
-        {areas.map((area) => (
-          <li
-            key={area.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-surface bg-bg-soft px-3 py-2 text-sm"
-          >
-            <span>
-              <span className="font-medium">{area.name}</span>
-              <span className="ml-2 text-xs text-text-muted">
-                {area.anchor_vertical}-{area.anchor_horizontal} · max {area.max_width_percent}×
-                {area.max_height_percent}%
-                {area.is_fullscreen ? ' · fullscreen' : ''}
+      <div>
+        <h2 className="mb-2 text-base font-semibold">Areas</h2>
+        <ul className="space-y-2">
+          {areas.map((area, index) => (
+            <li
+              key={area.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-surface bg-bg-soft px-3 py-2 text-sm"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">{area.name}</span>
+                <span className="ml-2 text-xs text-text-muted">
+                  {area.anchor_vertical}-{area.anchor_horizontal} · max {area.max_width_percent}×
+                  {area.max_height_percent}%
+                  {area.is_fullscreen ? ' · fullscreen' : ''}
+                </span>
               </span>
-            </span>
-            <span className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => startEdit(area)}
-                className="text-accent hover:underline"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => void removeArea(area.id)}
-                className="text-red-200 hover:underline"
-              >
-                Delete
-              </button>
-            </span>
-          </li>
-        ))}
-      </ul>
+              <span className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  title="Move up"
+                  disabled={index === 0 || reorderingId !== null}
+                  onClick={() => void moveArea(area.id, 'up')}
+                  className="rounded border border-surface px-2 py-0.5 text-xs disabled:opacity-40"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  title="Move down"
+                  disabled={index === areas.length - 1 || reorderingId !== null}
+                  onClick={() => void moveArea(area.id, 'down')}
+                  className="rounded border border-surface px-2 py-0.5 text-xs disabled:opacity-40"
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  onClick={() => startEdit(area)}
+                  className="px-2 text-accent hover:underline"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void removeArea(area.id)}
+                  className="px-2 text-red-200 hover:underline"
+                >
+                  Delete
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
       {editingId !== null ? (
         <form
-          className="rounded-md border border-surface bg-surface-soft p-4 space-y-3"
+          className="rounded-md border border-surface bg-surface-soft p-4"
           onSubmit={(e) => {
             e.preventDefault();
             void saveArea();
@@ -272,116 +418,111 @@ export default function LayoutAreasPage() {
           <h2 className="text-base font-semibold">
             {editingId === 'new' ? 'New area' : 'Edit area'}
           </h2>
-          <label className="block text-sm">
-            Name
-            <input
-              className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              Anchor vertical
-              <select
-                className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2"
-                value={form.anchor_vertical}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    anchor_vertical: e.target.value as LayoutAreaDto['anchor_vertical'],
-                  })
+
+          <div className="mt-4 grid gap-6 xl:grid-cols-2 xl:items-start">
+            <div className="space-y-4">
+              <label className="block text-sm">
+                Name
+                <input
+                  className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
+              </label>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.is_fullscreen === 1}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      is_fullscreen: e.target.checked ? 1 : 0,
+                      max_width_percent: e.target.checked ? 100 : form.max_width_percent,
+                      max_height_percent: e.target.checked ? 100 : form.max_height_percent,
+                      margin_top: e.target.checked ? 0 : form.margin_top,
+                      margin_right: e.target.checked ? 0 : form.margin_right,
+                      margin_bottom: e.target.checked ? 0 : form.margin_bottom,
+                      margin_left: e.target.checked ? 0 : form.margin_left,
+                    })
+                  }
+                />
+                Fullscreen area (fills entire stage)
+              </label>
+
+              <AnchorPicker
+                vertical={form.anchor_vertical}
+                horizontal={form.anchor_horizontal}
+                disabled={formDisabled}
+                onChange={(anchor_vertical, anchor_horizontal) =>
+                  setForm({ ...form, anchor_vertical, anchor_horizontal })
                 }
-              >
-                <option value="top">top</option>
-                <option value="middle">middle</option>
-                <option value="bottom">bottom</option>
-              </select>
-            </label>
-            <label className="block text-sm">
-              Anchor horizontal
-              <select
-                className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2"
-                value={form.anchor_horizontal}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    anchor_horizontal: e.target.value as LayoutAreaDto['anchor_horizontal'],
-                  })
-                }
-              >
-                <option value="left">left</option>
-                <option value="center">center</option>
-                <option value="right">right</option>
-              </select>
-            </label>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {(['margin_top', 'margin_right', 'margin_bottom', 'margin_left'] as const).map(
-              (key) => (
-                <label key={key} className="block text-xs">
-                  {key.replace('margin_', '')} %
+              />
+
+              <MarginSliders
+                key={String(editingId ?? 'none')}
+                marginTop={form.margin_top}
+                marginRight={form.margin_right}
+                marginBottom={form.margin_bottom}
+                marginLeft={form.margin_left}
+                disabled={formDisabled}
+                onChange={(margins) => setForm({ ...form, ...margins })}
+              />
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="flex justify-between text-xs text-text-muted">
+                    <span>Max width</span>
+                    <span>{form.max_width_percent}%</span>
+                  </span>
                   <input
-                    type="number"
-                    min={0}
+                    type="range"
+                    min={5}
                     max={100}
-                    className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-1"
-                    value={form[key]}
+                    disabled={formDisabled}
+                    value={form.max_width_percent}
                     onChange={(e) =>
-                      setForm({ ...form, [key]: Number(e.target.value) })
+                      setForm({ ...form, max_width_percent: Number(e.target.value) })
                     }
+                    className="mt-1 w-full accent-accent"
                   />
                 </label>
-              ),
-            )}
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              Max width %
-              <input
-                type="number"
-                min={0}
-                max={100}
-                disabled={form.is_fullscreen === 1}
-                className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2 disabled:opacity-50"
-                value={form.max_width_percent}
-                onChange={(e) =>
-                  setForm({ ...form, max_width_percent: Number(e.target.value) })
-                }
+                <label className="block text-sm">
+                  <span className="flex justify-between text-xs text-text-muted">
+                    <span>Max height</span>
+                    <span>{form.max_height_percent}%</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={5}
+                    max={100}
+                    disabled={formDisabled}
+                    value={form.max_height_percent}
+                    onChange={(e) =>
+                      setForm({ ...form, max_height_percent: Number(e.target.value) })
+                    }
+                    className="mt-1 w-full accent-accent"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="xl:sticky xl:top-4">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-text-muted">
+                Live preview
+              </p>
+              <LayoutStagePreview
+                slots={editPreviewSlots}
+                marginGuideArea={formDisabled ? null : previewArea}
               />
-            </label>
-            <label className="block text-sm">
-              Max height %
-              <input
-                type="number"
-                min={0}
-                max={100}
-                disabled={form.is_fullscreen === 1}
-                className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2 disabled:opacity-50"
-                value={form.max_height_percent}
-                onChange={(e) =>
-                  setForm({ ...form, max_height_percent: Number(e.target.value) })
-                }
-              />
-            </label>
+              <p className="mt-2 text-xs text-text-muted">
+                Dashed box = margin bounds. Uses the same sizing as the OBS stage overlay.
+              </p>
+            </div>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.is_fullscreen === 1}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  is_fullscreen: e.target.checked ? 1 : 0,
-                  max_width_percent: e.target.checked ? 100 : form.max_width_percent,
-                  max_height_percent: e.target.checked ? 100 : form.max_height_percent,
-                })
-              }
-            />
-            Fullscreen area
-          </label>
-          <div className="flex gap-2">
+
+          <div className="mt-6 flex gap-2">
             <button
               type="submit"
               disabled={saving}

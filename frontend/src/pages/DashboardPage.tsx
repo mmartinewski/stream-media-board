@@ -85,7 +85,7 @@ export default function DashboardPage() {
   const clipVolumeTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const [layoutAreas, setLayoutAreas] = useState<LayoutAreaDto[]>([]);
   const [layoutSettings, setLayoutSettings] = useState<LayoutSettingsResponse | null>(null);
-  const [layoutAreaByClipId, setLayoutAreaByClipId] = useState<Record<number, number>>({});
+  const [playAtFlyoutKey, setPlayAtFlyoutKey] = useState<string | null>(null);
   const [stageClientCount, setStageClientCount] = useState<number | null>(null);
 
   const showToast = useCallback((message: string, variant: DashboardToastVariant) => {
@@ -270,7 +270,7 @@ export default function DashboardPage() {
     }
   };
 
-  const handlePlay = async (clip: ClipDto) => {
+  const handlePlay = async (clip: ClipDto, explicitLayoutAreaId?: number) => {
     const id = clip.id;
     const token = Date.now();
     setPlayPulse({ id, token });
@@ -284,7 +284,7 @@ export default function DashboardPage() {
     try {
       const layoutAreaId =
         clip.clip_type === 'video'
-          ? (layoutAreaByClipId[id] ??
+          ? (explicitLayoutAreaId ??
             resolveDefaultLayoutAreaId(
               clip.video_orientation,
               layoutSettings,
@@ -773,13 +773,13 @@ export default function DashboardPage() {
                 return (
                 <li
                   key={clip.id}
-                  className="overflow-hidden rounded-md border border-surface/70 bg-bg-soft text-sm"
+                  className="rounded-md border border-surface/70 bg-bg-soft text-sm"
                 >
                   <div className="relative">
                     <img
                       src={clip.thumbnail_cropped_url}
                       alt=""
-                      className="aspect-square w-full bg-surface object-cover"
+                      className="aspect-square w-full rounded-t-md bg-surface object-cover"
                       loading="lazy"
                     />
                     <button
@@ -799,7 +799,11 @@ export default function DashboardPage() {
                       aria-label="Open clip menu"
                       onClick={() => {
                         setOpenCategoryMenuKey(null);
-                        setOpenMenuKey((current) => (current === menuKey ? null : menuKey));
+                        setOpenMenuKey((current) => {
+                          const next = current === menuKey ? null : menuKey;
+                          if (next !== menuKey) setPlayAtFlyoutKey(null);
+                          return next;
+                        });
                       }}
                       className="absolute right-2 top-2 z-20 rounded-full bg-black/45 px-2 py-1 text-xl leading-none text-white shadow backdrop-blur"
                     >
@@ -810,10 +814,69 @@ export default function DashboardPage() {
                         <button
                           type="button"
                           aria-label="Close menu"
-                          onClick={() => setOpenMenuKey(null)}
+                          onClick={() => {
+                            setOpenMenuKey(null);
+                            setPlayAtFlyoutKey(null);
+                          }}
                           className="fixed inset-0 z-20 cursor-default bg-transparent"
                         />
-                        <div className="absolute right-2 top-11 z-30 min-w-40 overflow-hidden rounded-md border border-surface bg-bg shadow-xl">
+                        <div className="absolute right-2 top-11 z-30 min-w-44 rounded-md border border-surface bg-bg shadow-xl">
+                        {clip.clip_type === 'video' && layoutAreas.length > 0 ? (
+                          <div className="border-b border-surface">
+                            <button
+                              type="button"
+                              aria-expanded={playAtFlyoutKey === menuKey}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPlayAtFlyoutKey((current) =>
+                                  current === menuKey ? null : menuKey,
+                                );
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft"
+                            >
+                              <span aria-hidden="true">▶</span>
+                              <span className="flex-1">Play in…</span>
+                              <span className="text-text-muted" aria-hidden="true">
+                                {playAtFlyoutKey === menuKey ? '▾' : '▸'}
+                              </span>
+                            </button>
+                            {playAtFlyoutKey === menuKey ? (
+                              <div
+                                className="max-h-48 overflow-y-auto border-t border-surface/50 bg-bg-soft py-1"
+                                role="menu"
+                                aria-label="Layout areas"
+                              >
+                                {layoutAreas.map((area) => {
+                                  const defaultAreaId = resolveDefaultLayoutAreaId(
+                                    clip.video_orientation,
+                                    layoutSettings,
+                                    layoutAreas,
+                                  );
+                                  const isDefault = defaultAreaId === area.id;
+                                  return (
+                                    <button
+                                      key={area.id}
+                                      type="button"
+                                      role="menuitem"
+                                      disabled={playingId === clip.id}
+                                      onClick={() => {
+                                        setOpenMenuKey(null);
+                                        setPlayAtFlyoutKey(null);
+                                        void handlePlay(clip, area.id);
+                                      }}
+                                      className={
+                                        'flex w-full items-center gap-2 py-2 pl-8 pr-3 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50 ' +
+                                        (isDefault ? 'bg-accent/10 text-accent' : '')
+                                      }
+                                    >
+                                      <span className="truncate">{area.name}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => openMetadataEditor(clip)}
@@ -888,42 +951,6 @@ export default function DashboardPage() {
                       {clip.category.name ?? '(uncategorized)'}
                       {' · Browser overlay'}
                     </p>
-                    {clip.clip_type === 'video' && layoutAreas.length > 0 ? (
-                      <div className="mt-2">
-                        <label
-                          htmlFor={`layout-area-${clip.id}`}
-                          className="block text-[10px] uppercase tracking-wide text-text-muted"
-                        >
-                          Layout area
-                        </label>
-                        <select
-                          id={`layout-area-${clip.id}`}
-                          className="mt-1 w-full rounded-md border border-surface bg-bg-soft px-2 py-1.5 text-xs"
-                          value={
-                            layoutAreaByClipId[clip.id] ??
-                            resolveDefaultLayoutAreaId(
-                              clip.video_orientation,
-                              layoutSettings,
-                              layoutAreas,
-                            ) ??
-                            ''
-                          }
-                          onChange={(e) => {
-                            const next = Number(e.target.value);
-                            setLayoutAreaByClipId((prev) => ({
-                              ...prev,
-                              [clip.id]: next,
-                            }));
-                          }}
-                        >
-                          {layoutAreas.map((area) => (
-                            <option key={area.id} value={area.id}>
-                              {area.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : null}
                     <div className="mt-2">
                       <label
                         htmlFor={`clip-volume-${clip.id}`}

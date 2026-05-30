@@ -23,6 +23,33 @@ export interface VideoSlotLayout {
   videoObjectFit: 'fill' | 'cover';
 }
 
+/** Sample aspects used in the layout areas editor preview. */
+export const LAYOUT_PREVIEW_ASPECTS = {
+  landscape: { videoW: 16, videoH: 9, label: '16:9' },
+  portrait: { videoW: 9, videoH: 16, label: '9:16' },
+} as const;
+
+export type LayoutPreviewSlotVariant = 'edit-landscape' | 'edit-portrait' | 'map-landscape' | 'map-portrait';
+
+export function toPreviewLayoutArea(
+  form: Omit<LayoutAreaDto, 'id' | 'created_at' | 'sort_order'> & { id?: number },
+): LayoutAreaDto {
+  return {
+    id: form.id ?? 0,
+    name: form.name,
+    sort_order: 0,
+    anchor_vertical: form.anchor_vertical,
+    anchor_horizontal: form.anchor_horizontal,
+    margin_top: form.margin_top,
+    margin_right: form.margin_right,
+    margin_bottom: form.margin_bottom,
+    margin_left: form.margin_left,
+    max_width_percent: form.max_width_percent,
+    max_height_percent: form.max_height_percent,
+    is_fullscreen: form.is_fullscreen,
+  };
+}
+
 export function computeVideoSlotLayout(
   stageW: number,
   stageH: number,
