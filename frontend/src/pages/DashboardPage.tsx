@@ -431,20 +431,25 @@ export default function DashboardPage() {
     setOpenMenuKey(null);
     setCardErrors((prev) => ({ ...prev, [clip.id]: '' }));
     setDownloadingId(clip.id);
+    const isVideo = clip.clip_type === 'video';
     try {
-      const res = await fetch(api.getClipAudioDownloadUrl(clip.id));
+      const downloadUrl = isVideo
+        ? api.getClipVideoDownloadUrl(clip.id)
+        : api.getClipAudioDownloadUrl(clip.id);
+      const res = await fetch(downloadUrl);
       if (!res.ok) {
         throw new Error(`Download failed (${res.status} ${res.statusText})`);
       }
       const contentType = res.headers.get('content-type') ?? '';
-      if (!contentType.toLowerCase().includes('audio')) {
-        throw new Error('Download did not return an audio file.');
+      const expectedKind = isVideo ? 'video' : 'audio';
+      if (!contentType.toLowerCase().includes(expectedKind)) {
+        throw new Error(`Download did not return a ${expectedKind} file.`);
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${toDownloadFilename(clip.title)}.mp3`;
+      link.download = `${toDownloadFilename(clip.title)}.${isVideo ? 'mp4' : 'mp3'}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -726,19 +731,17 @@ export default function DashboardPage() {
                           <span aria-hidden="true">✎</span>
                           Edit clip
                         </Link>
-                        {clip.clip_type !== 'video' ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleDownload(clip)}
-                            disabled={downloadingId === clip.id}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <span aria-hidden="true">
-                              <DownloadIcon />
-                            </span>
-                            {downloadingId === clip.id ? 'Downloading...' : 'Download'}
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => void handleDownload(clip)}
+                          disabled={downloadingId === clip.id}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <span aria-hidden="true">
+                            <DownloadIcon />
+                          </span>
+                          {downloadingId === clip.id ? 'Downloading...' : 'Download'}
+                        </button>
                         <button
                           type="button"
                           onClick={() => requestDelete(clip)}

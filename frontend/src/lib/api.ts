@@ -239,6 +239,7 @@ export const api = {
   playClip: (id: number) =>
     request<PlayClipResponse>(`/api/clips/${id}/play`, { method: 'POST' }),
   getClipAudioDownloadUrl: (id: number) => `/api/clips/${id}/audio?download=1`,
+  getClipVideoDownloadUrl: (id: number) => `/api/clips/${id}/video?download=1`,
   renameCategory: (id: number, name: string) =>
     request<{ id: number; name: string; message: string }>(`/api/categories/${id}`, {
       method: 'PATCH',

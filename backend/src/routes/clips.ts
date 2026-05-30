@@ -263,6 +263,14 @@ export function clipsRouter(): Router {
       }
       res.setHeader('Content-Type', 'video/mp4');
       res.setHeader('Accept-Ranges', 'bytes');
+      const asDownload =
+        req.query.download === '1' ||
+        req.query.download === 'true' ||
+        String(req.query.download ?? '').toLowerCase() === 'yes';
+      if (asDownload) {
+        res.download(row.video_path, `${toDownloadFilename(row.title)}.mp4`);
+        return;
+      }
       res.sendFile(row.video_path);
     } catch (err) {
       next(err);
