@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   api,
   type ClipDto,
@@ -60,8 +60,9 @@ const TOAST_DISMISS_MS = 4000;
 const VOLUME_SAVE_DEBOUNCE_MS = 400;
 
 export default function DashboardPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = searchParams.get('search') ?? '';
   const [clips, setClips] = useState<ClipsResponse | null>(null);
-  const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [cardErrors, setCardErrors] = useState<Record<number, string>>({});
   const [playingId, setPlayingId] = useState<number | null>(null);
@@ -130,6 +131,24 @@ export default function DashboardPage() {
     setPlayAtFlyoutKey(null);
     setEditFlyoutKey(null);
   }, []);
+
+  const updateSearch = useCallback(
+    (value: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value) {
+            next.set('search', value);
+          } else {
+            next.delete('search');
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   useEffect(() => {
     return () => {
@@ -671,7 +690,7 @@ export default function DashboardPage() {
           <input
             id="dashboard-search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => updateSearch(e.target.value)}
             placeholder="Title, category, or tag..."
             className="min-w-0 flex-1 rounded-md border border-surface bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent"
           />
@@ -686,7 +705,7 @@ export default function DashboardPage() {
           {search && (
             <button
               type="button"
-              onClick={() => setSearch('')}
+              onClick={() => updateSearch('')}
               className="rounded-md border border-surface px-3 py-2 text-sm hover:border-accent"
             >
               Clear
