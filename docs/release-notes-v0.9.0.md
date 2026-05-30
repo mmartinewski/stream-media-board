@@ -3,7 +3,7 @@
 ### Rebrand
 
 - Product renamed from **Personal Soundboard Player** to **Stream Media Board**.
-- GitHub repository: **`stream-media-board`** (rename the repo in GitHub Settings if you have not already).
+- GitHub repository: **`stream-media-board`** (formerly `personal-remote-soundboard`; GitHub redirects old URLs).
 - Positioning: LAN clip dashboard + **browser overlay** for any streaming app that supports a browser / web source (OBS Studio, Streamlabs Desktop, and similar).
 
 ### Upgrade from v0.8.x
