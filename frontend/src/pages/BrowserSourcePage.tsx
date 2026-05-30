@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { getBrowserSourceEventsUrl } from '../lib/overlay';
 import { parseBrowserSourceMode } from '../lib/videoOrientation';
 import { effectiveVolumeToElement } from '../lib/volume';
+import { computeVideoSlotLayout, type LayoutAreaDto, type VideoSlotLayout } from '../lib/layoutSlot';
 
 interface BrowserSourcePlayEvent {
   type: 'play';
@@ -13,6 +14,7 @@ interface BrowserSourcePlayEvent {
   width?: number;
   height?: number;
   orientation?: 'landscape' | 'portrait';
+  layoutArea?: LayoutAreaDto;
 }
 
 interface BrowserSourceStopEvent {
@@ -58,6 +60,7 @@ export default function BrowserSourcePage() {
   const generationRef = useRef(0);
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState('connecting');
+  const [videoSlotLayout, setVideoSlotLayout] = useState<VideoSlotLayout | null>(null);
   const fadeOutFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeOutStartedRef = useRef(false);
   const detachEndWatchRef = useRef<(() => void) | null>(null);
@@ -98,6 +101,7 @@ export default function BrowserSourcePage() {
     setVisible(false);
     clearVideo();
     clearAudio();
+    setVideoSlotLayout(null);
   }, [clearAudio, clearFadeOutFallback, clearVideo, detachEndWatch]);
 
   const finishFadeOut = useCallback(() => {
@@ -153,6 +157,23 @@ export default function BrowserSourcePage() {
       try {
         await waitForVideoMetadata(video);
         if (gen !== generationRef.current) return;
+
+        if (mode === 'stage' && event.layoutArea) {
+          const vw = video.videoWidth || event.width || 16;
+          const vh = video.videoHeight || event.height || 9;
+          setVideoSlotLayout(
+            computeVideoSlotLayout(
+              window.innerWidth,
+              window.innerHeight,
+              event.layoutArea,
+              vw,
+              vh,
+            ),
+          );
+        } else {
+          setVideoSlotLayout(null);
+        }
+
         video.currentTime = 0;
         await video.play();
         if (gen !== generationRef.current) return;
@@ -173,6 +194,7 @@ export default function BrowserSourcePage() {
       clearFadeOutFallback,
       detachEndWatch,
       startFadeOut,
+      mode,
     ],
   );
 
@@ -284,18 +306,50 @@ export default function BrowserSourcePage() {
         onEnded={handleAudioEnded}
       />
       <MotionStageInner
-        className={visible ? 'browser-source-media is-visible' : 'browser-source-media'}
+        className={
+          videoSlotLayout
+            ? 'browser-source-video-slot'
+            : visible
+              ? 'browser-source-media is-visible'
+              : 'browser-source-media'
+        }
         style={{
-          ['--browser-source-fade-duration' as string]: `${FADE_MS}ms`,
+          ...(videoSlotLayout?.slotStyle ?? {}),
+          ...(videoSlotLayout
+            ? {}
+            : {
+                ['--browser-source-fade-duration' as string]: `${FADE_MS}ms`,
+              }),
         }}
-        onTransitionEnd={handleTransitionEnd}
+        onTransitionEnd={videoSlotLayout ? undefined : handleTransitionEnd}
       >
-        <video
-          ref={videoRef}
-          className="browser-source-video"
-          playsInline
-          onEnded={handleVideoEnded}
-        />
+        <div
+          className={
+            videoSlotLayout
+              ? visible
+                ? 'browser-source-media is-visible'
+                : 'browser-source-media'
+              : undefined
+          }
+          style={
+            videoSlotLayout
+              ? { ['--browser-source-fade-duration' as string]: `${FADE_MS}ms` }
+              : undefined
+          }
+          onTransitionEnd={videoSlotLayout ? handleTransitionEnd : undefined}
+        >
+          <video
+            ref={videoRef}
+            className="browser-source-video"
+            playsInline
+            onEnded={handleVideoEnded}
+            style={
+              videoSlotLayout
+                ? { objectFit: videoSlotLayout.videoObjectFit, width: '100%', height: '100%' }
+                : undefined
+            }
+          />
+        </div>
       </MotionStageInner>
       {import.meta.env.DEV ? (
         <p className="browser-source-debug" aria-hidden="true">

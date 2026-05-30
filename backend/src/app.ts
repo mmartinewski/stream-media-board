@@ -11,6 +11,7 @@ import { thumbnailsRouter } from './routes/thumbnails.js';
 import { settingsRouter } from './routes/settings.js';
 import { youtubeRouter } from './routes/youtube.js';
 import { categoriesRouter } from './routes/categories.js';
+import { layoutAreasRouter } from './routes/layoutAreas.js';
 import { browserSourceRouter } from './routes/browserSource.js';
 import { logger } from './lib/logger.js';
 import type { AppPaths } from './config/paths.js';
@@ -31,6 +32,7 @@ export function createApp(paths: AppPaths): Express {
   app.use('/api/youtube', youtubeRouter());
   app.use('/api/categories', categoriesRouter());
   app.use('/api/browser-source', browserSourceRouter(paths));
+  app.use('/api/layout-areas', layoutAreasRouter());
 
   if (existsSync(paths.frontendDist)) {
     app.use(express.static(paths.frontendDist));

@@ -120,3 +120,9 @@ The clip form supports:
 ```
 
 `config/config.json` is ignored by Git.
+
+## 10. Browser overlay (current and planned)
+
+Today, video and audio clips play through a transparent **browser overlay** in OBS or Streamlabs (SSE from `/api/browser-source/events`), not through local `ffplay` on dashboard play. Setup is documented in [browser-source-setup.md](./browser-source-setup.md).
+
+A planned **Layout Stage** feature will move on-canvas positioning from OBS into the app: registerable layout areas (anchor, percent margins, percent max dimensions), intrinsic video sizing per clip aspect ratio, global **landscape / portrait → layout area** mapping in display settings, and a dashboard dropdown to override the play area. One fullscreen browser source at stream resolution (`?mode=stage`) would replace multiple orientation-specific sources. Full design: [overlay-layout-stage.md](./overlay-layout-stage.md) (proposed, not yet implemented).

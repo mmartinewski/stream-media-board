@@ -1,8 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { api, type ClipDto, type ClipsResponse } from '../lib/api';
+import {
+  api,
+  type ClipDto,
+  type ClipsResponse,
+  type LayoutAreaDto,
+  type LayoutSettingsResponse,
+  type VideoOrientation,
+} from '../lib/api';
+import { getBrowserOverlayUrl } from '../lib/overlay';
 import { clampClipVolume, clipVolumeMax } from '../lib/volume';
+
+function resolveDefaultLayoutAreaId(
+  orientation: VideoOrientation | null | undefined,
+  settings: LayoutSettingsResponse | null,
+  areas: LayoutAreaDto[],
+): number | undefined {
+  if (!settings || areas.length === 0) return areas[0]?.id;
+  const orient = orientation ?? 'landscape';
+  const fromSettings =
+    orient === 'portrait'
+      ? settings.layout_area_id_portrait
+      : settings.layout_area_id_landscape;
+  if (fromSettings != null && areas.some((a) => a.id === fromSettings)) {
+    return fromSettings;
+  }
+  return areas[0]?.id;
+}
 
 type DashboardToastVariant = 'error' | 'success' | 'warning';
 
@@ -58,6 +83,10 @@ export default function DashboardPage() {
   const [volumeSavingId, setVolumeSavingId] = useState<number | null>(null);
   const globalVolumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clipVolumeTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const [layoutAreas, setLayoutAreas] = useState<LayoutAreaDto[]>([]);
+  const [layoutSettings, setLayoutSettings] = useState<LayoutSettingsResponse | null>(null);
+  const [layoutAreaByClipId, setLayoutAreaByClipId] = useState<Record<number, number>>({});
+  const [stageClientCount, setStageClientCount] = useState<number | null>(null);
 
   const showToast = useCallback((message: string, variant: DashboardToastVariant) => {
     if (toastTimerRef.current) {
@@ -113,6 +142,45 @@ export default function DashboardPage() {
       window.clearTimeout(timer);
     };
   }, [search]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([api.getLayoutAreas(), api.getLayoutSettings()])
+      .then(([areasRes, settingsRes]) => {
+        if (!cancelled) {
+          setLayoutAreas(areasRes.areas);
+          setLayoutSettings(settingsRes);
+        }
+      })
+      .catch(() => {
+        /* layout areas optional for dashboard */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => {
+      void api
+        .getBrowserSourceStatus()
+        .then((status) => {
+          if (!cancelled) {
+            setStageClientCount(status.clients_by_mode?.stage ?? 0);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setStageClientCount(null);
+        });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const reloadClips = async () => {
     const next = await api.getClips(search);
@@ -214,7 +282,19 @@ export default function DashboardPage() {
     setCardErrors((prev) => ({ ...prev, [id]: '' }));
     setPlayingId(id);
     try {
-      const result = await api.playClip(id);
+      const layoutAreaId =
+        clip.clip_type === 'video'
+          ? (layoutAreaByClipId[id] ??
+            resolveDefaultLayoutAreaId(
+              clip.video_orientation,
+              layoutSettings,
+              layoutAreas,
+            ))
+          : undefined;
+      const result = await api.playClip(
+        id,
+        layoutAreaId != null ? { layout_area_id: layoutAreaId } : undefined,
+      );
       if (
         result.playback === 'browser_source' &&
         (result.connected_clients ?? 0) === 0
@@ -223,7 +303,7 @@ export default function DashboardPage() {
           ...prev,
           [id]:
             clip.clip_type === 'video'
-              ? 'No matching browser source — check landscape/portrait URL and clip orientation'
+              ? 'No stage browser source — use ?mode=stage in OBS (Layout areas)'
               : 'No audio browser source — add ?mode=audio or universal in OBS',
         }));
       }
@@ -602,6 +682,25 @@ export default function DashboardPage() {
             Applied on top of each clip&apos;s volume when playing in OBS.
           </p>
         </div>
+        {stageClientCount === 0 ? (
+          <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            Video overlay: no browser source on{' '}
+            <code className="rounded bg-black/30 px-1">?mode=stage</code>. Add{' '}
+            <a
+              href={getBrowserOverlayUrl('stage')}
+              className="text-accent underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              stage URL
+            </a>{' '}
+            in OBS, or use{' '}
+            <Link to="/settings/layout-areas" className="text-accent underline">
+              Layout areas
+            </Link>{' '}
+            to configure positions.
+          </p>
+        ) : null}
       </div>
 
       {sections.map((section, idx) => (
@@ -789,6 +888,42 @@ export default function DashboardPage() {
                       {clip.category.name ?? '(uncategorized)'}
                       {' · Browser overlay'}
                     </p>
+                    {clip.clip_type === 'video' && layoutAreas.length > 0 ? (
+                      <div className="mt-2">
+                        <label
+                          htmlFor={`layout-area-${clip.id}`}
+                          className="block text-[10px] uppercase tracking-wide text-text-muted"
+                        >
+                          Layout area
+                        </label>
+                        <select
+                          id={`layout-area-${clip.id}`}
+                          className="mt-1 w-full rounded-md border border-surface bg-bg-soft px-2 py-1.5 text-xs"
+                          value={
+                            layoutAreaByClipId[clip.id] ??
+                            resolveDefaultLayoutAreaId(
+                              clip.video_orientation,
+                              layoutSettings,
+                              layoutAreas,
+                            ) ??
+                            ''
+                          }
+                          onChange={(e) => {
+                            const next = Number(e.target.value);
+                            setLayoutAreaByClipId((prev) => ({
+                              ...prev,
+                              [clip.id]: next,
+                            }));
+                          }}
+                        >
+                          {layoutAreas.map((area) => (
+                            <option key={area.id} value={area.id}>
+                              {area.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
                     <div className="mt-2">
                       <label
                         htmlFor={`clip-volume-${clip.id}`}

@@ -31,6 +31,7 @@ export function browserSourceRouter(paths: AppPaths): Router {
         audio: '/overlay/browser?mode=audio',
         landscape: '/overlay/browser?mode=landscape',
         portrait: '/overlay/browser?mode=portrait',
+        stage: '/overlay/browser?mode=stage',
       },
     });
   });

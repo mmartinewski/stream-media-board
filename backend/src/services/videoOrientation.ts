@@ -1,8 +1,8 @@
 export type VideoOrientation = 'landscape' | 'portrait';
-export type BrowserSourceMode = 'universal' | 'audio' | 'landscape' | 'portrait';
+export type BrowserSourceMode = 'universal' | 'audio' | 'landscape' | 'portrait' | 'stage';
 
 const ORIENTATION_SET = new Set<string>(['landscape', 'portrait']);
-const MODE_SET = new Set<string>(['universal', 'audio', 'landscape', 'portrait']);
+const MODE_SET = new Set<string>(['universal', 'audio', 'landscape', 'portrait', 'stage']);
 
 export function deriveVideoOrientation(
   width: number,
@@ -56,10 +56,10 @@ export function browserSourceModeAcceptsClip(
   mediaKind?: 'audio' | 'video',
 ): boolean {
   if (mediaKind === 'audio') {
-    return mode === 'audio' || mode === 'universal';
+    return mode === 'audio' || mode === 'universal' || mode === 'stage';
   }
   if (mode === 'audio') return false;
-  if (mode === 'universal') return true;
+  if (mode === 'stage' || mode === 'universal') return true;
   const resolved = clipOrientation ?? 'landscape';
   return mode === resolved;
 }

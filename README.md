@@ -45,8 +45,9 @@ Use separate browser sources when you want different on-canvas layouts (e.g. ful
 | **Universal** | `?mode=universal` | Audio + all video clips |
 | **Landscape** | `?mode=landscape` | Landscape video only |
 | **Portrait** | `?mode=portrait` | Portrait video only |
+| **Stage** (early) | `?mode=stage` | All video clips on one canvas; position via **Layout areas** in the app |
 
-Recommended OBS setup: **`audio`** for the soundboard + **`landscape`** / **`portrait`** for video. Avoid **`universal`** if you already use orientation-specific video sources (otherwise videos play twice).
+Recommended OBS setup (v0.8+): **`audio`** for the soundboard + **`stage`** for video (one source, configurable regions). Legacy **`landscape`** / **`portrait`** sources still work if you prefer them. Avoid **`universal`** if you already use orientation-specific video sources (otherwise videos play twice).
 
 | Environment | Example (audio) |
 | --- | --- |
@@ -76,6 +77,8 @@ The clip form lists all overlay URLs with **Copy** when **Video clip** is select
 ### More detail
 
 Step-by-step notes, troubleshooting (black background), and audio vs video behavior: **[docs/browser-source-setup.md](docs/browser-source-setup.md)**.
+
+**Layout Stage** (early, v0.8+): single-source layout areas and in-app positioning — **[docs/overlay-layout-stage.md](docs/overlay-layout-stage.md)**. More features will ship in upcoming releases.
 
 Release checklist and API notes: [docs/next-release.md](docs/next-release.md).
 

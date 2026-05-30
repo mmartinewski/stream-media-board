@@ -6,6 +6,8 @@ import {
   type VideoOrientation,
 } from './videoOrientation.js';
 
+import type { LayoutAreaDto } from './layoutAreaTypes.js';
+
 export interface BrowserSourcePlayEvent {
   type: 'play';
   mediaUrl: string;
@@ -15,6 +17,7 @@ export interface BrowserSourcePlayEvent {
   width?: number;
   height?: number;
   orientation?: VideoOrientation;
+  layoutArea?: LayoutAreaDto;
 }
 
 export interface BrowserSourceStopEvent {
@@ -93,6 +96,7 @@ export function browserSourceClientCountByMode(): Record<BrowserSourceMode, numb
     audio: 0,
     landscape: 0,
     portrait: 0,
+    stage: 0,
   };
   for (const client of clients.values()) {
     counts[client.mode] += 1;

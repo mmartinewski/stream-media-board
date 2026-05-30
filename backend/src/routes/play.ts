@@ -13,6 +13,7 @@ import {
   publishBrowserSourceStopAll,
   browserSourceClientsForEvent,
 } from '../services/browserSourceHub.js';
+import { resolveLayoutAreaForClip } from '../services/layoutAreaResolve.js';
 import { resolveClipVideoOrientation } from '../services/videoOrientation.js';
 import { cutToMp3 } from '../services/ffmpeg.js';
 import {
@@ -145,12 +146,15 @@ export function playRouter(paths: AppPaths): Router {
         throw new HttpError(404, 'Clip not found.', 'clip_not_found');
       }
       const playbackVolume = getPlaybackVolume(db);
+      const body = (req.body ?? {}) as { layout_area_id?: unknown };
+      const requestedLayoutAreaId = parseOptionalLayoutAreaId(body.layout_area_id);
       if (row.clip_type === 'video') {
         if (!row.video_path || !existsSync(row.video_path)) {
           throw new HttpError(404, 'Video file not found.', 'video_missing');
         }
         stopActivePlayback();
         publishBrowserSourceStopAll();
+        const layoutArea = resolveLayoutAreaForClip(db, row, requestedLayoutAreaId);
         const playEvent = {
           type: 'play' as const,
           mediaKind: 'video' as const,
@@ -164,6 +168,7 @@ export function playRouter(paths: AppPaths): Router {
             row.video_width,
             row.video_height,
           ),
+          layoutArea,
         };
         publishBrowserSourceEvent(playEvent);
         res.json({
@@ -202,6 +207,13 @@ export function playRouter(paths: AppPaths): Router {
 function clampVolume(value: number): number {
   if (!Number.isFinite(value)) return 75;
   return Math.max(0, Math.min(300, Math.round(value)));
+}
+
+function parseOptionalLayoutAreaId(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id < 1) return null;
+  return id;
 }
 
 function parseClipIdParam(raw: string | undefined): number {

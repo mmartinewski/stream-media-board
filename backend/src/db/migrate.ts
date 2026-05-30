@@ -1,4 +1,8 @@
 import type { Database as BetterDatabase } from 'better-sqlite3';
+import {
+  ensureLayoutAreasSchema,
+  seedLayoutAreasIfEmpty,
+} from './repositories/layoutAreas.js';
 
 // IMPORTANT: keep this in sync with `schema.sql` in the same folder.
 // The `.sql` file is the human reference; this DDL is what actually runs.
@@ -55,6 +59,8 @@ export function migrate(db: BetterDatabase): void {
   db.prepare(
     `UPDATE clips SET video_orientation = 'landscape' WHERE video_orientation = 'square'`,
   ).run();
+  ensureLayoutAreasSchema(db);
+  seedLayoutAreasIfEmpty(db);
 }
 
 function ensureColumn(

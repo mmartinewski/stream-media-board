@@ -47,6 +47,7 @@ interface ClipDto {
   audio_fade: number;
   is_favorite: number;
   created_at: string;
+  video_orientation?: 'landscape' | 'portrait' | null;
 }
 
 export function clipsRouter(): Router {
@@ -74,6 +75,12 @@ export function clipsRouter(): Router {
         audio_fade: row.audio_fade,
         is_favorite: row.is_favorite,
         created_at: row.created_at,
+        video_orientation:
+          row.clip_type === 'video'
+            ? row.video_orientation === 'portrait'
+              ? 'portrait'
+              : 'landscape'
+            : undefined,
       };
 
       if (row.is_favorite === 1) favorites.push(dto);

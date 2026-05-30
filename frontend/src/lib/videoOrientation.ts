@@ -1,5 +1,5 @@
 export type VideoOrientation = 'landscape' | 'portrait';
-export type BrowserSourceMode = 'universal' | 'audio' | 'landscape' | 'portrait';
+export type BrowserSourceMode = 'universal' | 'audio' | 'landscape' | 'portrait' | 'stage';
 
 export function parseBrowserSourceMode(value: string | null): BrowserSourceMode {
   const normalized = (value ?? 'universal').trim().toLowerCase();
@@ -7,6 +7,7 @@ export function parseBrowserSourceMode(value: string | null): BrowserSourceMode 
     normalized === 'audio' ||
     normalized === 'landscape' ||
     normalized === 'portrait' ||
+    normalized === 'stage' ||
     normalized === 'universal'
   ) {
     return normalized;

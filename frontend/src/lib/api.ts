@@ -21,6 +21,7 @@ export interface ClipDto {
   audio_normalize: number;
   is_favorite: number;
   created_at: string;
+  video_orientation?: VideoOrientation | null;
 }
 
 export type ClipsSection =
@@ -38,6 +39,35 @@ export interface PlayClipResponse {
   status: string;
   playback: 'browser_source' | 'local';
   connected_clients?: number;
+  warnings?: string[];
+}
+
+export interface LayoutAreaDto {
+  id: number;
+  name: string;
+  sort_order: number;
+  anchor_vertical: 'top' | 'middle' | 'bottom';
+  anchor_horizontal: 'left' | 'center' | 'right';
+  margin_top: number;
+  margin_right: number;
+  margin_bottom: number;
+  margin_left: number;
+  max_width_percent: number;
+  max_height_percent: number;
+  is_fullscreen: number;
+  created_at?: string;
+}
+
+export interface LayoutSettingsResponse {
+  layout_area_id_landscape: number | null;
+  layout_area_id_portrait: number | null;
+  areas: { id: number; name: string }[];
+}
+
+export interface BrowserSourceStatusResponse {
+  connected_clients: number;
+  clients_by_mode: Record<string, number>;
+  overlay_paths: Record<string, string>;
 }
 
 export interface PrefetchResponse {
@@ -236,8 +266,45 @@ export const api = {
       method: 'PUT',
       body: form,
     }),
-  playClip: (id: number) =>
-    request<PlayClipResponse>(`/api/clips/${id}/play`, { method: 'POST' }),
+  playClip: (id: number, body?: { layout_area_id?: number }) =>
+    request<PlayClipResponse>(`/api/clips/${id}/play`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    }),
+  getLayoutAreas: () => request<{ areas: LayoutAreaDto[] }>('/api/layout-areas'),
+  getLayoutSettings: () => request<LayoutSettingsResponse>('/api/layout-areas/settings'),
+  updateLayoutSettings: (body: {
+    layout_area_id_landscape?: number | null;
+    layout_area_id_portrait?: number | null;
+  }) =>
+    request<LayoutSettingsResponse>('/api/layout-areas/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  createLayoutArea: (body: Omit<LayoutAreaDto, 'id' | 'created_at'>) =>
+    request<LayoutAreaDto>('/api/layout-areas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  updateLayoutArea: (id: number, body: Omit<LayoutAreaDto, 'id' | 'created_at'>) =>
+    request<LayoutAreaDto>(`/api/layout-areas/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  deleteLayoutArea: (id: number) =>
+    request<{ status: string; id: number }>(`/api/layout-areas/${id}`, {
+      method: 'DELETE',
+    }),
+  restoreLayoutAreaDefaults: () =>
+    request<{ areas: LayoutAreaDto[] }>('/api/layout-areas/restore-defaults', {
+      method: 'POST',
+    }),
+  getBrowserSourceStatus: () =>
+    request<BrowserSourceStatusResponse>('/api/browser-source/status'),
   getClipAudioDownloadUrl: (id: number) => `/api/clips/${id}/audio?download=1`,
   getClipVideoDownloadUrl: (id: number) => `/api/clips/${id}/video?download=1`,
   renameCategory: (id: number, name: string) =>

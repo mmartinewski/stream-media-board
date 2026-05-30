@@ -12,6 +12,9 @@ export default function AppShell() {
             <Link to="/" className="hover:text-text">
               Dashboard
             </Link>
+            <Link to="/settings/layout-areas" className="hover:text-text">
+              Layout areas
+            </Link>
             <Link
               to="/clips/new"
               className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-soft"

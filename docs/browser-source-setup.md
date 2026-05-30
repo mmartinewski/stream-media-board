@@ -2,6 +2,8 @@
 
 Video and audio clips from Personal Soundboard Player play on a **transparent web overlay**, not through local `ffplay`. Add one or more **Browser Source** entries in OBS Studio or Streamlabs Desktop, then trigger clips from the dashboard.
 
+> **Planned:** A single fullscreen browser source with **layout areas** (positioning inside the page instead of multiple OBS sources) is specified in [overlay-layout-stage.md](./overlay-layout-stage.md). That feature is not implemented yet; the sections below describe the **current** multi-mode setup.
+
 ## Overlay URLs
 
 Append `?mode=` to choose which clips that source receives. Use the same host and port as the soundboard backend.
@@ -94,7 +96,12 @@ Audio uses the clip volume from the editor (100 = normal). Route soundboard audi
 
 ---
 
+## Legacy multi-mode setup
+
+The workflow above (separate Browser Sources per `?mode=`, with position and size set in OBS) remains the supported approach until **Layout Stage** ships. After implementation, the target setup is one source at canvas resolution with `?mode=stage`; see [overlay-layout-stage.md](./overlay-layout-stage.md) §11.
+
 ## Related docs
 
+- [overlay-layout-stage.md](./overlay-layout-stage.md) — technical spec for layout areas and single-stage overlay (proposed)
 - [README.md](../README.md) — project overview
 - [next-release.md](./next-release.md) — release checklist and API notes
