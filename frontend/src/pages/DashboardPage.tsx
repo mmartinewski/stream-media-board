@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
@@ -9,6 +16,10 @@ import {
   type LayoutSettingsResponse,
 } from '../lib/api';
 import { getBrowserOverlayUrl } from '../lib/overlay';
+import {
+  readDashboardGridMode,
+  writeDashboardGridMode,
+} from '../lib/dashboardPreferences';
 import { clampClipVolume, clipVolumeMax } from '../lib/volume';
 
 function resolvePlayLayoutAreaId(
@@ -58,6 +69,71 @@ const TOAST_CLASS: Record<DashboardToastVariant, string> = {
 
 const TOAST_DISMISS_MS = 4000;
 const VOLUME_SAVE_DEBOUNCE_MS = 400;
+const CONTROLS_OPEN_STORAGE_KEY = 'dashboard-controls-open';
+
+function readControlsOpenPreference(): boolean {
+  try {
+    return localStorage.getItem(CONTROLS_OPEN_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+const GRID_POPOVER_MARGIN = 8;
+const GRID_POPOVER_GAP = 4;
+const GRID_POPOVER_ESTIMATED_WIDTH = 176;
+const GRID_POPOVER_ESTIMATED_HEIGHT = 280;
+
+function computeGridPopoverStyle(
+  anchor: DOMRect,
+  menu?: { width: number; height: number },
+): CSSProperties {
+  const margin = GRID_POPOVER_MARGIN;
+  const gap = GRID_POPOVER_GAP;
+  const viewportW = window.innerWidth;
+  const viewportH = window.innerHeight;
+  const menuWidth = Math.min(
+    menu?.width ?? GRID_POPOVER_ESTIMATED_WIDTH,
+    viewportW - margin * 2,
+  );
+  const menuHeight = menu?.height ?? GRID_POPOVER_ESTIMATED_HEIGHT;
+  const maxHeight = viewportH - margin * 2;
+
+  const spaceBelow = viewportH - anchor.bottom - gap - margin;
+  const spaceAbove = anchor.top - gap - margin;
+  let openBelow = spaceBelow >= menuHeight || spaceBelow >= spaceAbove;
+
+  let top = openBelow ? anchor.bottom + gap : anchor.top - gap - menuHeight;
+  if (openBelow && top + menuHeight > viewportH - margin) {
+    const aboveTop = anchor.top - gap - menuHeight;
+    if (aboveTop >= margin) {
+      openBelow = false;
+      top = aboveTop;
+    } else {
+      top = Math.max(margin, viewportH - margin - Math.min(menuHeight, maxHeight));
+    }
+  }
+  if (!openBelow && top < margin) {
+    top = margin;
+  }
+
+  let left = anchor.right - menuWidth;
+  left = Math.max(margin, Math.min(left, viewportW - margin - menuWidth));
+
+  const style: CSSProperties = {
+    position: 'fixed',
+    top,
+    left,
+  };
+
+  const availableBelow = viewportH - margin - top;
+  if (menuHeight > availableBelow) {
+    style.maxHeight = Math.max(120, availableBelow);
+    style.overflowY = 'auto';
+  }
+
+  return style;
+}
 
 export default function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -105,7 +181,32 @@ export default function DashboardPage() {
   const [layoutSettings, setLayoutSettings] = useState<LayoutSettingsResponse | null>(null);
   const [playAtFlyoutKey, setPlayAtFlyoutKey] = useState<string | null>(null);
   const [editFlyoutKey, setEditFlyoutKey] = useState<string | null>(null);
+  const [volumeFlyoutKey, setVolumeFlyoutKey] = useState<string | null>(null);
   const [stageClientCount, setStageClientCount] = useState<number | null>(null);
+  const [gridMode, setGridMode] = useState(() => readDashboardGridMode());
+  const [controlsOpen, setControlsOpen] = useState(readControlsOpenPreference);
+  const gridPopoverAnchorRef = useRef<HTMLElement | null>(null);
+  const gridPopoverMenuRef = useRef<HTMLDivElement | null>(null);
+  const [gridPopoverStyle, setGridPopoverStyle] = useState<CSSProperties | null>(null);
+
+  const setGridModePersisted = useCallback(
+    (update: boolean | ((current: boolean) => boolean)) => {
+      setGridMode((current) => {
+        const next = typeof update === 'function' ? update(current) : update;
+        writeDashboardGridMode(next);
+        return next;
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONTROLS_OPEN_STORAGE_KEY, controlsOpen ? '1' : '0');
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [controlsOpen]);
 
   const showToast = useCallback((message: string, variant: DashboardToastVariant) => {
     if (toastTimerRef.current) {
@@ -130,7 +231,57 @@ export default function DashboardPage() {
     setOpenMenuKey(null);
     setPlayAtFlyoutKey(null);
     setEditFlyoutKey(null);
+    setVolumeFlyoutKey(null);
+    gridPopoverAnchorRef.current = null;
+    gridPopoverMenuRef.current = null;
+    setGridPopoverStyle(null);
   }, []);
+
+  const syncGridPopoverPosition = useCallback(() => {
+    const anchorEl = gridPopoverAnchorRef.current;
+    if (!anchorEl) return;
+    const anchor = anchorEl.getBoundingClientRect();
+    const menuEl = gridPopoverMenuRef.current;
+    const menuSize = menuEl
+      ? { width: menuEl.offsetWidth, height: menuEl.offsetHeight }
+      : undefined;
+    setGridPopoverStyle(computeGridPopoverStyle(anchor, menuSize));
+  }, []);
+
+  const pinGridPopoverAnchor = useCallback(
+    (element: HTMLElement) => {
+      gridPopoverAnchorRef.current = element;
+      syncGridPopoverPosition();
+    },
+    [syncGridPopoverPosition],
+  );
+
+  useLayoutEffect(() => {
+    if (!openMenuKey && !playAtFlyoutKey) {
+      setGridPopoverStyle(null);
+      return;
+    }
+    syncGridPopoverPosition();
+    const menuEl = gridPopoverMenuRef.current;
+    const resizeObserver =
+      menuEl && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => syncGridPopoverPosition())
+        : null;
+    resizeObserver?.observe(menuEl!);
+    window.addEventListener('scroll', syncGridPopoverPosition, true);
+    window.addEventListener('resize', syncGridPopoverPosition);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('scroll', syncGridPopoverPosition, true);
+      window.removeEventListener('resize', syncGridPopoverPosition);
+    };
+  }, [
+    openMenuKey,
+    playAtFlyoutKey,
+    editFlyoutKey,
+    volumeFlyoutKey,
+    syncGridPopoverPosition,
+  ]);
 
   const updateSearch = useCallback(
     (value: string) => {
@@ -646,13 +797,16 @@ export default function DashboardPage() {
   }
 
   const isSearching = search.trim().length > 0;
+  const allClips = uniqueClips(clips.sections.flatMap((section) => section.clips));
   const sections = isSearching
     ? [{
         type: 'search' as const,
         title: 'Search results',
-        clips: uniqueClips(clips.sections.flatMap((section) => section.clips)),
+        clips: allClips,
       }]
-    : clips.sections;
+    : gridMode
+      ? [{ type: 'all' as const, clips: allClips }]
+      : clips.sections;
 
   return (
     <>
@@ -681,167 +835,430 @@ export default function DashboardPage() {
           )
         : null}
 
-      <section className="space-y-6">
-        <div className="sticky top-0 z-30 rounded-md border border-surface bg-bg/95 p-3 shadow-lg backdrop-blur">
-        <label htmlFor="dashboard-search" className="block text-sm font-medium">
-          Search clips
-        </label>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <input
-            id="dashboard-search"
-            value={search}
-            onChange={(e) => updateSearch(e.target.value)}
-            placeholder="Title, category, or tag..."
-            className="min-w-0 flex-1 rounded-md border border-surface bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent"
-          />
-          <button
-            type="button"
-            onClick={() => void handleStopAll()}
-            disabled={stoppingAll}
-            className="shrink-0 rounded-md border border-surface px-3 py-2 text-sm font-medium hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {stoppingAll ? 'Stopping...' : 'Stop all'}
-          </button>
-          {search && (
+      <section
+        className={
+          'space-y-6 ' +
+          (gridMode
+            ? 'relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen max-w-[100vw] px-3 sm:px-4'
+            : '')
+        }
+      >
+        <div className="sticky top-0 z-30 rounded-md border border-surface bg-bg/95 shadow-lg backdrop-blur">
+          <div className="flex flex-wrap items-center gap-2 p-3">
+            <div className="relative min-w-[10rem] flex-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
+                <SearchIcon />
+              </span>
+              <input
+                id="dashboard-search"
+                type="search"
+                value={search}
+                onChange={(e) => updateSearch(e.target.value)}
+                placeholder="Search"
+                aria-label="Search clips"
+                className="w-full rounded-md border border-surface bg-bg-soft py-2 pl-9 pr-3 text-sm outline-none focus:border-accent"
+              />
+            </div>
             <button
               type="button"
-              onClick={() => updateSearch('')}
-              className="rounded-md border border-surface px-3 py-2 text-sm hover:border-accent"
+              onClick={() => void handleStopAll()}
+              disabled={stoppingAll}
+              className="flex shrink-0 items-center gap-2 rounded-md border border-surface px-3 py-2 text-sm font-medium hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Clear
+              <StopIcon />
+              {stoppingAll ? 'Stopping...' : 'Stop all'}
             </button>
-          )}
-        </div>
-        <div className="mt-3 border-t border-surface/50 pt-3">
-          <label
-            htmlFor="global-playback-volume"
-            className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium"
-          >
-            <span>Global volume</span>
-            <span className="text-xs font-normal text-text-muted">
-              {globalVolumeSaving ? 'Saving…' : `${playbackVolume}%`}
-            </span>
-          </label>
-          <input
-            id="global-playback-volume"
-            type="range"
-            min={0}
-            max={100}
-            value={playbackVolume}
-            onChange={(e) => handleGlobalVolumeChange(Number(e.target.value))}
-            className="mt-1 w-full accent-accent"
-          />
-          <p className="mt-1 text-xs text-text-muted">
-            Applied on top of each clip&apos;s volume when playing in OBS.
-          </p>
-        </div>
-        {stageClientCount === 0 ? (
-          <p className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-            Video overlay: no browser source on{' '}
-            <code className="rounded bg-black/30 px-1">?mode=stage</code>. Add{' '}
-            <a
-              href={getBrowserOverlayUrl('stage')}
-              className="text-accent underline"
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() => setControlsOpen((current) => !current)}
+              aria-expanded={controlsOpen}
+              aria-label={controlsOpen ? 'Hide controls' : 'Show controls'}
+              title={controlsOpen ? 'Hide controls' : 'Show controls'}
+              className={
+                'flex shrink-0 items-center justify-center rounded-md border px-3 py-2 ' +
+                (controlsOpen
+                  ? 'border-accent bg-accent/15 text-text hover:bg-accent/25'
+                  : 'border-surface text-text-muted hover:border-accent hover:text-text')
+              }
             >
-              stage URL
-            </a>{' '}
-            in OBS, or use{' '}
-            <Link to="/settings/layout-areas" className="text-accent underline">
-              Layout areas
-            </Link>{' '}
-            to configure positions.
-          </p>
-        ) : null}
-      </div>
+              <ControlsIcon />
+            </button>
+            {search && (
+              <button
+                type="button"
+                onClick={() => updateSearch('')}
+                className="shrink-0 rounded-md border border-surface px-3 py-2 text-sm hover:border-accent"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          {controlsOpen ? (
+            <div className="space-y-3 border-t border-surface/50 px-3 pb-3 pt-3">
+              <button
+                type="button"
+                onClick={() => setGridModePersisted((current) => !current)}
+                aria-pressed={gridMode}
+                title={gridMode ? 'Switch to standard cards' : 'Switch to compact grid cards'}
+                className={
+                  'rounded-md border px-3 py-2 text-sm font-medium ' +
+                  (gridMode
+                    ? 'border-accent bg-accent/15 text-text hover:bg-accent/25'
+                    : 'border-surface hover:border-accent')
+                }
+              >
+                {gridMode ? 'Standard view' : 'Grid view'}
+              </button>
+              <div>
+                <label
+                  htmlFor="global-playback-volume"
+                  className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium"
+                >
+                  <span>Global volume</span>
+                  <span className="text-xs font-normal text-text-muted">
+                    {globalVolumeSaving ? 'Saving…' : `${playbackVolume}%`}
+                  </span>
+                </label>
+                <input
+                  id="global-playback-volume"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={playbackVolume}
+                  onChange={(e) => handleGlobalVolumeChange(Number(e.target.value))}
+                  className="mt-1 w-full accent-accent"
+                />
+                <p className="mt-1 text-xs text-text-muted">
+                  Applied on top of each clip&apos;s volume when playing in OBS.
+                </p>
+              </div>
+              {stageClientCount === 0 ? (
+                <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                  Video overlay: no browser source on{' '}
+                  <code className="rounded bg-black/30 px-1">?mode=stage</code>. Add{' '}
+                  <a
+                    href={getBrowserOverlayUrl('stage')}
+                    className="text-accent underline"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    stage URL
+                  </a>{' '}
+                  in OBS, or use{' '}
+                  <Link to="/settings/layout-areas" className="text-accent underline">
+                    Layout areas
+                  </Link>{' '}
+                  to configure positions.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
       {sections.map((section, idx) => (
         <article
           key={idx}
-          className="rounded-md border border-surface bg-surface-soft p-4"
+          className={
+            'rounded-md border border-surface bg-surface-soft ' +
+            (gridMode ? 'p-2 sm:p-3' : 'p-4')
+          }
         >
-          {section.type === 'category' && section.category.id != null ? (
-            <div className="relative mb-2 flex items-center justify-between gap-2">
-              <h3 className="min-w-0 flex-1 truncate text-base font-semibold">
-                {section.category.name}
-              </h3>
-              <button
-                type="button"
-                aria-label="Open category menu"
-                onClick={() =>
-                  setOpenCategoryMenuKey((current) =>
-                    current === `category-${section.category.id}`
-                      ? null
-                      : `category-${section.category.id}`,
-                  )
-                }
-                className="shrink-0 rounded-full border border-surface bg-bg px-2 py-1 text-lg leading-none text-text-muted hover:border-accent hover:text-text"
-              >
-                ⋮
-              </button>
-              {openCategoryMenuKey === `category-${section.category.id}` && (
-                <>
-                  <button
-                    type="button"
-                    aria-label="Close category menu"
-                    onClick={() => setOpenCategoryMenuKey(null)}
-                    className="fixed inset-0 z-20 cursor-default bg-transparent"
-                  />
-                  <div className="absolute right-0 top-9 z-30 min-w-36 overflow-hidden rounded-md border border-surface bg-bg shadow-xl">
+          {!gridMode &&
+            (section.type === 'category' && section.category.id != null ? (
+              <div className="relative mb-2 flex items-center justify-between gap-2">
+                <h3 className="min-w-0 flex-1 truncate text-base font-semibold">
+                  {section.category.name}
+                </h3>
+                <button
+                  type="button"
+                  aria-label="Open category menu"
+                  onClick={() =>
+                    setOpenCategoryMenuKey((current) =>
+                      current === `category-${section.category.id}`
+                        ? null
+                        : `category-${section.category.id}`,
+                    )
+                  }
+                  className="shrink-0 rounded-full border border-surface bg-bg px-2 py-1 text-lg leading-none text-text-muted hover:border-accent hover:text-text"
+                >
+                  ⋮
+                </button>
+                {openCategoryMenuKey === `category-${section.category.id}` && (
+                  <>
                     <button
                       type="button"
-                      onClick={() =>
-                        openCategoryRename({
-                          id: section.category.id!,
-                          name: section.category.name,
-                        })
-                      }
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft"
-                    >
-                      <span aria-hidden="true">✎</span>
-                      Edit category
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <h3 className="mb-2 text-base font-semibold">
-              {section.type === 'favorites'
-                ? 'Favorites'
-                : section.type === 'search'
-                  ? section.title
-                  : section.category.name}
-            </h3>
-          )}
+                      aria-label="Close category menu"
+                      onClick={() => setOpenCategoryMenuKey(null)}
+                      className="fixed inset-0 z-20 cursor-default bg-transparent"
+                    />
+                    <div className="absolute right-0 top-9 z-30 min-w-36 overflow-hidden rounded-md border border-surface bg-bg shadow-xl">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openCategoryRename({
+                            id: section.category.id!,
+                            name: section.category.name,
+                          })
+                        }
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft"
+                      >
+                        <span aria-hidden="true">✎</span>
+                        Edit category
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <h3 className="mb-2 text-base font-semibold">
+                {section.type === 'favorites'
+                  ? 'Favorites'
+                  : section.type === 'search'
+                    ? section.title
+                    : section.type === 'category'
+                      ? section.category.name
+                      : ''}
+              </h3>
+            ))}
           {section.clips.length === 0 ? (
             <p className="text-sm text-text-muted">
-              {isSearching ? 'No clips match this search.' : 'No clips in this section.'}
+              {isSearching
+                ? 'No clips match this search.'
+                : gridMode
+                  ? 'No clips yet.'
+                  : 'No clips in this section.'}
             </p>
           ) : (
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            <ul
+              className={
+                gridMode
+                  ? 'grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10'
+                  : 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'
+              }
+            >
               {section.clips.map((clip) => {
-                const menuKey = `${section.type}-${section.type === 'category' ? section.category.id ?? 'none' : section.type}-${clip.id}`;
+                const menuKey = gridMode
+                  ? `grid-${clip.id}`
+                  : `${section.type}-${section.type === 'category' ? section.category.id ?? 'none' : section.type}-${clip.id}`;
+                const clipMenuPanel = (
+                  <>
+                    {clip.clip_type === 'video' && layoutAreas.length > 0 ? (
+                      <div className="border-b border-surface">
+                        <button
+                          type="button"
+                          aria-expanded={playAtFlyoutKey === menuKey}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditFlyoutKey(null);
+                            setVolumeFlyoutKey(null);
+                            setPlayAtFlyoutKey((current) =>
+                              current === menuKey ? null : menuKey,
+                            );
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft"
+                        >
+                          <span aria-hidden="true">▶</span>
+                          <span className="flex-1">Play in…</span>
+                          <span className="text-text-muted" aria-hidden="true">
+                            {playAtFlyoutKey === menuKey ? '▾' : '▸'}
+                          </span>
+                        </button>
+                        {playAtFlyoutKey === menuKey ? (
+                          <div
+                            className="max-h-48 overflow-y-auto border-t border-surface/50 bg-bg-soft py-1"
+                            role="menu"
+                            aria-label="Layout areas"
+                          >
+                            <PlayInAreaList
+                              clip={clip}
+                              areas={layoutAreas}
+                              settings={layoutSettings}
+                              playingId={playingId}
+                              onSelect={(areaId) => {
+                                closeClipCardMenus();
+                                void handlePlay(clip, areaId);
+                              }}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <div className="border-b border-surface">
+                      <button
+                        type="button"
+                        aria-expanded={editFlyoutKey === menuKey}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPlayAtFlyoutKey(null);
+                          setVolumeFlyoutKey(null);
+                          setEditFlyoutKey((current) =>
+                            current === menuKey ? null : menuKey,
+                          );
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft"
+                      >
+                        <span aria-hidden="true">✎</span>
+                        <span className="flex-1">Edit</span>
+                        <span className="text-text-muted" aria-hidden="true">
+                          {editFlyoutKey === menuKey ? '▾' : '▸'}
+                        </span>
+                      </button>
+                      {editFlyoutKey === menuKey ? (
+                        <div
+                          className="border-t border-surface/50 bg-bg-soft py-1"
+                          role="menu"
+                          aria-label="Edit options"
+                        >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => openMetadataEditor(clip)}
+                            className="flex w-full items-center gap-2 py-2 pl-8 pr-3 text-left text-sm hover:bg-surface-soft"
+                          >
+                            <span aria-hidden="true">📝</span>
+                            Metadata
+                          </button>
+                          <Link
+                            to={`/clips/${clip.id}/edit`}
+                            role="menuitem"
+                            className="flex items-center gap-2 py-2 pl-8 pr-3 text-sm hover:bg-surface-soft"
+                            onClick={closeClipCardMenus}
+                          >
+                            <span aria-hidden="true">🎬</span>
+                            Full editor
+                          </Link>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="border-b border-surface">
+                      <button
+                        type="button"
+                        aria-expanded={volumeFlyoutKey === menuKey}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPlayAtFlyoutKey(null);
+                          setEditFlyoutKey(null);
+                          setVolumeFlyoutKey((current) =>
+                            current === menuKey ? null : menuKey,
+                          );
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft"
+                      >
+                        <span aria-hidden="true">🔊</span>
+                        <span className="flex-1">Volume</span>
+                        <span className="text-xs tabular-nums text-text-muted">
+                          {volumeSavingId === clip.id ? 'Saving…' : clip.volume}
+                        </span>
+                        <span className="text-text-muted" aria-hidden="true">
+                          {volumeFlyoutKey === menuKey ? '▾' : '▸'}
+                        </span>
+                      </button>
+                      {volumeFlyoutKey === menuKey ? (
+                        <div className="border-t border-surface/50 bg-bg-soft px-3 py-3">
+                          <label
+                            htmlFor={`clip-menu-volume-${clip.id}`}
+                            className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-text-muted"
+                          >
+                            <span>Level</span>
+                            <span>
+                              {volumeSavingId === clip.id ? 'Saving…' : clip.volume}
+                            </span>
+                          </label>
+                          <input
+                            id={`clip-menu-volume-${clip.id}`}
+                            type="range"
+                            min={0}
+                            max={clipVolumeMax(clip.clip_type)}
+                            value={Math.min(clip.volume, clipVolumeMax(clip.clip_type))}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              handleClipVolumeChange(clip, Number(e.target.value))
+                            }
+                            className="mt-2 w-full accent-accent"
+                            aria-label={`Volume for ${clip.title}`}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleDownload(clip)}
+                      disabled={downloadingId === clip.id}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span aria-hidden="true">
+                        <DownloadIcon />
+                      </span>
+                      {downloadingId === clip.id ? 'Downloading...' : 'Download'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => requestDelete(clip)}
+                      disabled={deletingId === clip.id}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-200 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span aria-hidden="true">🗑</span>
+                      {deletingId === clip.id ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </>
+                );
+                const playInFlyoutPanel = (
+                  <>
+                    <p className="border-b border-surface px-3 py-2 text-xs font-medium text-text-muted">
+                      Play in…
+                    </p>
+                    <div
+                      className="max-h-48 overflow-y-auto py-1"
+                      role="menu"
+                      aria-label="Layout areas"
+                    >
+                      <PlayInAreaList
+                        clip={clip}
+                        areas={layoutAreas}
+                        settings={layoutSettings}
+                        playingId={playingId}
+                        itemClassName="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
+                        onSelect={(areaId) => {
+                          closeClipCardMenus();
+                          void handlePlay(clip, areaId);
+                        }}
+                      />
+                    </div>
+                  </>
+                );
                 return (
                 <li
                   key={clip.id}
-                  className="rounded-md border border-surface/70 bg-bg-soft text-sm"
+                  className={
+                    'rounded-md border border-surface/70 bg-bg-soft text-sm ' +
+                    (gridMode ? 'relative aspect-square overflow-hidden' : '')
+                  }
                 >
-                  <div className="relative">
+                  <div className={gridMode ? 'relative h-full w-full' : 'relative'}>
                     <img
                       src={clip.thumbnail_cropped_url}
                       alt=""
-                      className="aspect-square w-full rounded-t-md bg-surface object-cover"
+                      className={
+                        gridMode
+                          ? 'absolute inset-0 h-full w-full bg-surface object-cover'
+                          : 'aspect-square w-full rounded-t-md bg-surface object-cover'
+                      }
                       loading="lazy"
                     />
                     <button
                       type="button"
                       aria-label={clip.is_favorite === 1 ? 'Remove from favorites' : 'Mark as favorite'}
-                      onClick={() => void handleToggleFavorite(clip)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleToggleFavorite(clip);
+                      }}
                       disabled={favoriteId === clip.id}
                       className={
-                        'absolute left-2 top-2 z-10 rounded-full bg-black/45 px-2 py-1 text-xl leading-none shadow backdrop-blur ' +
+                        'absolute left-2 z-20 rounded-full bg-black/45 shadow backdrop-blur ' +
+                        (gridMode
+                          ? 'top-1.5 px-1.5 py-0.5 text-base leading-none'
+                          : 'top-2 px-2 py-1 text-xl leading-none') +
+                        ' ' +
                         (clip.is_favorite === 1 ? 'text-yellow-300' : 'text-white')
                       }
                     >
@@ -860,13 +1277,22 @@ export default function DashboardPage() {
                             setOpenCategoryMenuKey(null);
                             setOpenMenuKey(null);
                             setEditFlyoutKey(null);
-                            setPlayAtFlyoutKey((current) =>
-                              current === menuKey ? null : menuKey,
-                            );
+                            setVolumeFlyoutKey(null);
+                            if (playAtFlyoutKey === menuKey) {
+                              closeClipCardMenus();
+                              return;
+                            }
+                            pinGridPopoverAnchor(e.currentTarget);
+                            setPlayAtFlyoutKey(menuKey);
                           }}
-                          className="absolute right-10 top-2 z-20 rounded-full bg-black/45 p-1.5 text-white shadow backdrop-blur hover:bg-black/60"
+                          className={
+                            'absolute z-20 rounded-full bg-black/45 text-white shadow backdrop-blur hover:bg-black/60 ' +
+                            (gridMode
+                              ? 'right-9 top-1.5 p-1'
+                              : 'right-10 top-2 p-1.5')
+                          }
                         >
-                          <PlayInShortcutIcon />
+                          <PlayInShortcutIcon className={gridMode ? 'h-3.5 w-3.5' : undefined} />
                         </button>
                         {playAtFlyoutKey === menuKey && openMenuKey !== menuKey ? (
                           <>
@@ -874,30 +1300,20 @@ export default function DashboardPage() {
                               type="button"
                               aria-label="Close play in menu"
                               onClick={closeClipCardMenus}
-                              className="fixed inset-0 z-20 cursor-default bg-transparent"
+                              className="fixed inset-0 z-[45] cursor-default bg-transparent"
                             />
-                            <div className="absolute right-10 top-11 z-30 min-w-44 overflow-hidden rounded-md border border-surface bg-bg shadow-xl">
-                              <p className="border-b border-surface px-3 py-2 text-xs font-medium text-text-muted">
-                                Play in…
-                              </p>
-                              <div
-                                className="max-h-48 overflow-y-auto py-1"
-                                role="menu"
-                                aria-label="Layout areas"
-                              >
-                                <PlayInAreaList
-                                  clip={clip}
-                                  areas={layoutAreas}
-                                  settings={layoutSettings}
-                                  playingId={playingId}
-                                  itemClassName="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
-                                  onSelect={(areaId) => {
-                                    closeClipCardMenus();
-                                    void handlePlay(clip, areaId);
-                                  }}
-                                />
-                              </div>
-                            </div>
+                            {gridPopoverStyle
+                              ? createPortal(
+                                  <div
+                                    ref={gridPopoverMenuRef}
+                                    style={gridPopoverStyle}
+                                    className="z-[50] min-w-44 overflow-hidden rounded-md border border-surface bg-bg shadow-xl"
+                                  >
+                                    {playInFlyoutPanel}
+                                  </div>,
+                                  document.body,
+                                )
+                              : null}
                           </>
                         ) : null}
                       </>
@@ -905,19 +1321,24 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       aria-label="Open clip menu"
-                      onClick={() => {
+                      onClick={(e) => {
                         setOpenCategoryMenuKey(null);
-                        setOpenMenuKey((current) => {
-                          if (current === menuKey) {
-                            closeClipCardMenus();
-                            return null;
-                          }
-                          setPlayAtFlyoutKey(null);
-                          setEditFlyoutKey(null);
-                          return menuKey;
-                        });
+                        if (openMenuKey === menuKey) {
+                          closeClipCardMenus();
+                          return;
+                        }
+                        pinGridPopoverAnchor(e.currentTarget);
+                        setPlayAtFlyoutKey(null);
+                        setEditFlyoutKey(null);
+                        setVolumeFlyoutKey(null);
+                        setOpenMenuKey(menuKey);
                       }}
-                      className="absolute right-2 top-2 z-20 rounded-full bg-black/45 px-2 py-1 text-xl leading-none text-white shadow backdrop-blur"
+                      className={
+                        'absolute right-2 z-20 rounded-full bg-black/45 text-white shadow backdrop-blur ' +
+                        (gridMode
+                          ? 'top-1.5 px-1.5 py-0.5 text-base leading-none'
+                          : 'top-2 px-2 py-1 text-xl leading-none')
+                      }
                     >
                       ⋮
                     </button>
@@ -927,116 +1348,20 @@ export default function DashboardPage() {
                           type="button"
                           aria-label="Close menu"
                           onClick={closeClipCardMenus}
-                          className="fixed inset-0 z-20 cursor-default bg-transparent"
+                          className="fixed inset-0 z-[45] cursor-default bg-transparent"
                         />
-                        <div className="absolute right-2 top-11 z-30 min-w-44 rounded-md border border-surface bg-bg shadow-xl">
-                        {clip.clip_type === 'video' && layoutAreas.length > 0 ? (
-                          <div className="border-b border-surface">
-                            <button
-                              type="button"
-                              aria-expanded={playAtFlyoutKey === menuKey}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditFlyoutKey(null);
-                                setPlayAtFlyoutKey((current) =>
-                                  current === menuKey ? null : menuKey,
-                                );
-                              }}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft"
-                            >
-                              <span aria-hidden="true">▶</span>
-                              <span className="flex-1">Play in…</span>
-                              <span className="text-text-muted" aria-hidden="true">
-                                {playAtFlyoutKey === menuKey ? '▾' : '▸'}
-                              </span>
-                            </button>
-                            {playAtFlyoutKey === menuKey ? (
+                        {gridPopoverStyle
+                          ? createPortal(
                               <div
-                                className="max-h-48 overflow-y-auto border-t border-surface/50 bg-bg-soft py-1"
-                                role="menu"
-                                aria-label="Layout areas"
+                                ref={gridPopoverMenuRef}
+                                style={gridPopoverStyle}
+                                className="z-[50] min-w-44 rounded-md border border-surface bg-bg shadow-xl"
                               >
-                                <PlayInAreaList
-                                  clip={clip}
-                                  areas={layoutAreas}
-                                  settings={layoutSettings}
-                                  playingId={playingId}
-                                  onSelect={(areaId) => {
-                                    closeClipCardMenus();
-                                    void handlePlay(clip, areaId);
-                                  }}
-                                />
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                        <div className="border-b border-surface">
-                          <button
-                            type="button"
-                            aria-expanded={editFlyoutKey === menuKey}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPlayAtFlyoutKey(null);
-                              setEditFlyoutKey((current) =>
-                                current === menuKey ? null : menuKey,
-                              );
-                            }}
-                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft"
-                          >
-                            <span aria-hidden="true">✎</span>
-                            <span className="flex-1">Edit</span>
-                            <span className="text-text-muted" aria-hidden="true">
-                              {editFlyoutKey === menuKey ? '▾' : '▸'}
-                            </span>
-                          </button>
-                          {editFlyoutKey === menuKey ? (
-                            <div
-                              className="border-t border-surface/50 bg-bg-soft py-1"
-                              role="menu"
-                              aria-label="Edit options"
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => openMetadataEditor(clip)}
-                                className="flex w-full items-center gap-2 py-2 pl-8 pr-3 text-left text-sm hover:bg-surface-soft"
-                              >
-                                <span aria-hidden="true">📝</span>
-                                Metadata
-                              </button>
-                              <Link
-                                to={`/clips/${clip.id}/edit`}
-                                role="menuitem"
-                                className="flex items-center gap-2 py-2 pl-8 pr-3 text-sm hover:bg-surface-soft"
-                                onClick={closeClipCardMenus}
-                              >
-                                <span aria-hidden="true">🎬</span>
-                                Full editor
-                              </Link>
-                            </div>
-                          ) : null}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void handleDownload(clip)}
-                          disabled={downloadingId === clip.id}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <span aria-hidden="true">
-                            <DownloadIcon />
-                          </span>
-                          {downloadingId === clip.id ? 'Downloading...' : 'Download'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => requestDelete(clip)}
-                          disabled={deletingId === clip.id}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-200 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <span aria-hidden="true">🗑</span>
-                          {deletingId === clip.id ? 'Deleting...' : 'Delete'}
-                        </button>
-                      </div>
+                                {clipMenuPanel}
+                              </div>,
+                              document.body,
+                            )
+                          : null}
                       </>
                     )}
                     <button
@@ -1045,26 +1370,43 @@ export default function DashboardPage() {
                       onClick={() => void handlePlay(clip)}
                       disabled={deletingId === clip.id}
                       className={
-                        'absolute inset-0 flex items-center justify-center text-white transition duration-200 hover:bg-black/20 disabled:opacity-60 ' +
+                        'absolute flex items-center justify-center text-white transition duration-200 hover:bg-black/20 disabled:opacity-60 ' +
+                        'inset-0 z-[1] ' +
+                        ' ' +
                         (playPulse?.id === clip.id ? 'bg-white/25' : 'bg-black/10')
                       }
                     >
                       <span
                         className={
-                          'relative flex h-16 w-16 items-center justify-center rounded-full shadow-lg backdrop-blur transition-all duration-300 ' +
+                          'relative flex items-center justify-center rounded-full shadow-lg backdrop-blur transition-all duration-300 ' +
+                          (gridMode ? 'h-10 w-10 ' : 'h-16 w-16 ') +
                           (playPulse?.id === clip.id
                             ? 'scale-125 bg-white/90 text-bg ring-4 ring-white/60'
                             : 'scale-100 bg-black/45 text-white')
                         }
                       >
                         {clip.clip_type === 'video' ? (
-                          <VideoClipIcon />
+                          <VideoClipIcon className={gridMode ? 'h-4 w-4' : undefined} />
                         ) : (
-                          <AudioClipIcon />
+                          <AudioClipIcon className={gridMode ? 'h-4 w-4' : undefined} />
                         )}
                       </span>
                     </button>
+                    {gridMode ? (
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col justify-end bg-gradient-to-t from-black/85 via-black/40 to-transparent px-2 pb-2 pt-8 text-left">
+                        <p
+                          className="truncate text-xs font-medium leading-tight text-white"
+                          title={clip.title}
+                        >
+                          {clip.title}
+                        </p>
+                        <p className="truncate text-[10px] leading-tight text-white/75">
+                          {clip.category.name ?? '(uncategorized)'}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
+                  {!gridMode ? (
                   <div className="p-3">
                     <p
                       className="truncate font-medium"
@@ -1088,33 +1430,16 @@ export default function DashboardPage() {
                         Play → Audio clip
                       </p>
                     ) : null}
-                    <div className="mt-2">
-                      <label
-                        htmlFor={`clip-volume-${clip.id}`}
-                        className="flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide text-text-muted"
-                      >
-                        <span>Volume</span>
-                        <span>
-                          {volumeSavingId === clip.id ? 'Saving…' : clip.volume}
-                        </span>
-                      </label>
-                      <input
-                        id={`clip-volume-${clip.id}`}
-                        type="range"
-                        min={0}
-                        max={clipVolumeMax(clip.clip_type)}
-                        value={Math.min(clip.volume, clipVolumeMax(clip.clip_type))}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) =>
-                          handleClipVolumeChange(clip, Number(e.target.value))
-                        }
-                        className="mt-1 w-full accent-accent"
-                        aria-label={`Volume for ${clip.title}`}
-                      />
-                    </div>
                   </div>
+                  ) : null}
                   {cardErrors[clip.id] && (
-                    <div className="border-t border-red-500/30 bg-red-500/10 p-2 text-xs text-red-200">
+                    <div
+                      className={
+                        gridMode
+                          ? 'absolute inset-x-0 top-0 z-20 border-b border-red-500/30 bg-red-950/90 px-2 py-1 text-[10px] text-red-200'
+                          : 'border-t border-red-500/30 bg-red-500/10 p-2 text-xs text-red-200'
+                      }
+                    >
                       {cardErrors[clip.id]}
                     </div>
                   )}
@@ -1467,12 +1792,12 @@ function PlayInAreaList({
   );
 }
 
-function VideoClipIcon() {
+function VideoClipIcon({ className = 'h-8 w-8' }: { className?: string }) {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
-      className="h-8 w-8"
+      className={className}
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"
@@ -1486,12 +1811,12 @@ function VideoClipIcon() {
 }
 
 /** Speaker icon paths from Wikimedia Commons (Speaker_Icon.svg). */
-function AudioClipIcon() {
+function AudioClipIcon({ className = 'h-8 w-8' }: { className?: string }) {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 75 75"
-      className="h-8 w-8"
+      className={className}
       fill="currentColor"
       stroke="currentColor"
     >
@@ -1510,15 +1835,61 @@ function AudioClipIcon() {
   );
 }
 
-function PlayInShortcutIcon() {
+function PlayInShortcutIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className={className}
+      fill="currentColor"
+    >
+      <path d="M7.5 5.5v9l7-4.5-7-4.5Z" />
+    </svg>
+  );
+}
+
+function ControlsIcon() {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 20 20"
       className="h-4 w-4"
-      fill="currentColor"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
     >
-      <path d="M7.5 5.5v9l7-4.5-7-4.5Z" />
+      <path d="M3 6h14M3 10h14M3 14h14" />
+      <circle cx="7" cy="6" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="13" cy="10" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="14" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    >
+      <circle cx="8.5" cy="8.5" r="4.5" />
+      <path d="m13 13 3.5 3.5" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
+      <rect x="5" y="5" width="10" height="10" rx="1" />
     </svg>
   );
 }
