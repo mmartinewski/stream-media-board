@@ -4,10 +4,11 @@
 
 - **Grid view**: full-width compact square cards with title/category overlays, favorite toggle, and clip actions on the thumbnail.
 - **Standard view** unchanged for category sections; grid mode shows a flat list of all clips.
-- **Toolbar**: search and Stop all always visible; volume, grid toggle, and OBS hint live in a collapsible controls panel (toggle button beside Stop all).
-- **Menus**: clip dropdowns render in a viewport-aware portal so they are not clipped by cards or the title area.
+- **Grid toggle** in the app header (grid/list icon beside Dashboard), with the last mode saved in `localStorage`.
+- **Sticky toolbar**: search, Stop all, and controls toggle stay visible while scrolling; optional panel for global volume and OBS stage hint.
+- **Menus**: clip dropdowns render in a viewport-aware portal so they are not clipped by cards or page layout.
 - **Volume**: per-clip volume moved into the clip menu (Volume submenu).
-- **Preference**: last grid/standard view choice is saved in `localStorage` and restored on return.
+- **Search** field with inline icon and `search` URL parameter (from v0.9.1, unchanged).
 
 ### Upgrade from v0.9.1
 

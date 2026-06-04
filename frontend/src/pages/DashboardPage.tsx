@@ -15,11 +15,7 @@ import {
   type LayoutAreaDto,
   type LayoutSettingsResponse,
 } from '../lib/api';
-import { getBrowserOverlayUrl } from '../lib/overlay';
-import {
-  readDashboardGridMode,
-  writeDashboardGridMode,
-} from '../lib/dashboardPreferences';
+import { useDashboardView } from '../contexts/DashboardViewContext';
 import { clampClipVolume, clipVolumeMax } from '../lib/volume';
 
 function resolvePlayLayoutAreaId(
@@ -69,16 +65,6 @@ const TOAST_CLASS: Record<DashboardToastVariant, string> = {
 
 const TOAST_DISMISS_MS = 4000;
 const VOLUME_SAVE_DEBOUNCE_MS = 400;
-const CONTROLS_OPEN_STORAGE_KEY = 'dashboard-controls-open';
-
-function readControlsOpenPreference(): boolean {
-  try {
-    return localStorage.getItem(CONTROLS_OPEN_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 const GRID_POPOVER_MARGIN = 8;
 const GRID_POPOVER_GAP = 4;
 const GRID_POPOVER_ESTIMATED_WIDTH = 176;
@@ -145,7 +131,6 @@ export default function DashboardPage() {
   const [playPulse, setPlayPulse] = useState<{ id: number; token: number } | null>(null);
   const [toast, setToast] = useState<DashboardToast | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [stoppingAll, setStoppingAll] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [favoriteId, setFavoriteId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
@@ -172,41 +157,17 @@ export default function DashboardPage() {
   const [metadataSaving, setMetadataSaving] = useState(false);
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const metadataTitleRef = useRef<HTMLInputElement>(null);
-  const [playbackVolume, setPlaybackVolume] = useState(75);
-  const [globalVolumeSaving, setGlobalVolumeSaving] = useState(false);
   const [volumeSavingId, setVolumeSavingId] = useState<number | null>(null);
-  const globalVolumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clipVolumeTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const [layoutAreas, setLayoutAreas] = useState<LayoutAreaDto[]>([]);
   const [layoutSettings, setLayoutSettings] = useState<LayoutSettingsResponse | null>(null);
   const [playAtFlyoutKey, setPlayAtFlyoutKey] = useState<string | null>(null);
   const [editFlyoutKey, setEditFlyoutKey] = useState<string | null>(null);
   const [volumeFlyoutKey, setVolumeFlyoutKey] = useState<string | null>(null);
-  const [stageClientCount, setStageClientCount] = useState<number | null>(null);
-  const [gridMode, setGridMode] = useState(() => readDashboardGridMode());
-  const [controlsOpen, setControlsOpen] = useState(readControlsOpenPreference);
+  const { gridMode } = useDashboardView();
   const gridPopoverAnchorRef = useRef<HTMLElement | null>(null);
   const gridPopoverMenuRef = useRef<HTMLDivElement | null>(null);
   const [gridPopoverStyle, setGridPopoverStyle] = useState<CSSProperties | null>(null);
-
-  const setGridModePersisted = useCallback(
-    (update: boolean | ((current: boolean) => boolean)) => {
-      setGridMode((current) => {
-        const next = typeof update === 'function' ? update(current) : update;
-        writeDashboardGridMode(next);
-        return next;
-      });
-    },
-    [],
-  );
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(CONTROLS_OPEN_STORAGE_KEY, controlsOpen ? '1' : '0');
-    } catch {
-      /* ignore quota / private mode */
-    }
-  }, [controlsOpen]);
 
   const showToast = useCallback((message: string, variant: DashboardToastVariant) => {
     if (toastTimerRef.current) {
@@ -283,31 +244,10 @@ export default function DashboardPage() {
     syncGridPopoverPosition,
   ]);
 
-  const updateSearch = useCallback(
-    (value: string) => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (value) {
-            next.set('search', value);
-          } else {
-            next.delete('search');
-          }
-          return next;
-        },
-        { replace: true },
-      );
-    },
-    [setSearchParams],
-  );
-
   useEffect(() => {
     return () => {
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
-      }
-      if (globalVolumeTimerRef.current) {
-        clearTimeout(globalVolumeTimerRef.current);
       }
       for (const timer of clipVolumeTimersRef.current.values()) {
         clearTimeout(timer);
@@ -323,7 +263,6 @@ export default function DashboardPage() {
         .then((c) => {
           if (!cancelled) {
             setClips(c);
-            setPlaybackVolume(c.playback_volume);
           }
         })
         .catch((err: unknown) => {
@@ -354,32 +293,9 @@ export default function DashboardPage() {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const refresh = () => {
-      void api
-        .getBrowserSourceStatus()
-        .then((status) => {
-          if (!cancelled) {
-            setStageClientCount(status.clients_by_mode?.stage ?? 0);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) setStageClientCount(null);
-        });
-    };
-    refresh();
-    const timer = window.setInterval(refresh, 15000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, []);
-
   const reloadClips = async () => {
     const next = await api.getClips(search);
     setClips(next);
-    setPlaybackVolume(next.playback_volume);
   };
 
   const updateClipVolumeInState = useCallback((clipId: number, volume: number) => {
@@ -396,34 +312,6 @@ export default function DashboardPage() {
       };
     });
   }, []);
-
-  const handleGlobalVolumeChange = (value: number) => {
-    const safe = Math.max(0, Math.min(100, Math.round(value)));
-    setPlaybackVolume(safe);
-    if (globalVolumeTimerRef.current) {
-      clearTimeout(globalVolumeTimerRef.current);
-    }
-    globalVolumeTimerRef.current = setTimeout(() => {
-      void (async () => {
-        setGlobalVolumeSaving(true);
-        try {
-          const saved = await api.setVolume(safe);
-          setPlaybackVolume(saved.playback_volume);
-          setClips((prev) =>
-            prev ? { ...prev, playback_volume: saved.playback_volume } : prev,
-          );
-        } catch (err) {
-          showToast(err instanceof Error ? err.message : String(err), 'error');
-          setClips((prev) => {
-            if (prev) setPlaybackVolume(prev.playback_volume);
-            return prev;
-          });
-        } finally {
-          setGlobalVolumeSaving(false);
-        }
-      })();
-    }, VOLUME_SAVE_DEBOUNCE_MS);
-  };
 
   const handleClipVolumeChange = (clip: ClipDto, raw: number) => {
     const volume = clampClipVolume(raw, clip.clip_type);
@@ -449,19 +337,6 @@ export default function DashboardPage() {
         })();
       }, VOLUME_SAVE_DEBOUNCE_MS),
     );
-  };
-
-  const handleStopAll = async () => {
-    dismissToast();
-    setStoppingAll(true);
-    try {
-      await api.stop();
-      showToast('All overlays stopped.', 'success');
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : String(err), 'error');
-    } finally {
-      setStoppingAll(false);
-    }
   };
 
   const handlePlay = async (clip: ClipDto, explicitLayoutAreaId?: number) => {
@@ -843,118 +718,6 @@ export default function DashboardPage() {
             : '')
         }
       >
-        <div className="sticky top-0 z-30 rounded-md border border-surface bg-bg/95 shadow-lg backdrop-blur">
-          <div className="flex flex-wrap items-center gap-2 p-3">
-            <div className="relative min-w-[10rem] flex-1">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
-                <SearchIcon />
-              </span>
-              <input
-                id="dashboard-search"
-                type="search"
-                value={search}
-                onChange={(e) => updateSearch(e.target.value)}
-                placeholder="Search"
-                aria-label="Search clips"
-                className="w-full rounded-md border border-surface bg-bg-soft py-2 pl-9 pr-3 text-sm outline-none focus:border-accent"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => void handleStopAll()}
-              disabled={stoppingAll}
-              className="flex shrink-0 items-center gap-2 rounded-md border border-surface px-3 py-2 text-sm font-medium hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <StopIcon />
-              {stoppingAll ? 'Stopping...' : 'Stop all'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setControlsOpen((current) => !current)}
-              aria-expanded={controlsOpen}
-              aria-label={controlsOpen ? 'Hide controls' : 'Show controls'}
-              title={controlsOpen ? 'Hide controls' : 'Show controls'}
-              className={
-                'flex shrink-0 items-center justify-center rounded-md border px-3 py-2 ' +
-                (controlsOpen
-                  ? 'border-accent bg-accent/15 text-text hover:bg-accent/25'
-                  : 'border-surface text-text-muted hover:border-accent hover:text-text')
-              }
-            >
-              <ControlsIcon />
-            </button>
-            {search && (
-              <button
-                type="button"
-                onClick={() => updateSearch('')}
-                className="shrink-0 rounded-md border border-surface px-3 py-2 text-sm hover:border-accent"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          {controlsOpen ? (
-            <div className="space-y-3 border-t border-surface/50 px-3 pb-3 pt-3">
-              <button
-                type="button"
-                onClick={() => setGridModePersisted((current) => !current)}
-                aria-pressed={gridMode}
-                title={gridMode ? 'Switch to standard cards' : 'Switch to compact grid cards'}
-                className={
-                  'rounded-md border px-3 py-2 text-sm font-medium ' +
-                  (gridMode
-                    ? 'border-accent bg-accent/15 text-text hover:bg-accent/25'
-                    : 'border-surface hover:border-accent')
-                }
-              >
-                {gridMode ? 'Standard view' : 'Grid view'}
-              </button>
-              <div>
-                <label
-                  htmlFor="global-playback-volume"
-                  className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium"
-                >
-                  <span>Global volume</span>
-                  <span className="text-xs font-normal text-text-muted">
-                    {globalVolumeSaving ? 'Saving…' : `${playbackVolume}%`}
-                  </span>
-                </label>
-                <input
-                  id="global-playback-volume"
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={playbackVolume}
-                  onChange={(e) => handleGlobalVolumeChange(Number(e.target.value))}
-                  className="mt-1 w-full accent-accent"
-                />
-                <p className="mt-1 text-xs text-text-muted">
-                  Applied on top of each clip&apos;s volume when playing in OBS.
-                </p>
-              </div>
-              {stageClientCount === 0 ? (
-                <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                  Video overlay: no browser source on{' '}
-                  <code className="rounded bg-black/30 px-1">?mode=stage</code>. Add{' '}
-                  <a
-                    href={getBrowserOverlayUrl('stage')}
-                    className="text-accent underline"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    stage URL
-                  </a>{' '}
-                  in OBS, or use{' '}
-                  <Link to="/settings/layout-areas" className="text-accent underline">
-                    Layout areas
-                  </Link>{' '}
-                  to configure positions.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-
       {sections.map((section, idx) => (
         <article
           key={idx}
@@ -1844,52 +1607,6 @@ function PlayInShortcutIcon({ className = 'h-4 w-4' }: { className?: string }) {
       fill="currentColor"
     >
       <path d="M7.5 5.5v9l7-4.5-7-4.5Z" />
-    </svg>
-  );
-}
-
-function ControlsIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 20 20"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-    >
-      <path d="M3 6h14M3 10h14M3 14h14" />
-      <circle cx="7" cy="6" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="13" cy="10" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="9" cy="14" r="1.5" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 20 20"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.8"
-    >
-      <circle cx="8.5" cy="8.5" r="4.5" />
-      <path d="m13 13 3.5 3.5" />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
-      <rect x="5" y="5" width="10" height="10" rx="1" />
     </svg>
   );
 }
