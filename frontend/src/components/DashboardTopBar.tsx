@@ -182,15 +182,6 @@ export default function DashboardTopBar() {
         >
           <ControlsIcon />
         </button>
-        {search ? (
-          <button
-            type="button"
-            onClick={() => updateSearch('')}
-            className="shrink-0 rounded-md border border-surface px-3 py-2 text-sm hover:border-accent"
-          >
-            Clear
-          </button>
-        ) : null}
       </div>
       {controlsOpen ? (
         <div className="space-y-3 border-t border-surface/50 px-3 pb-3 pt-3">
