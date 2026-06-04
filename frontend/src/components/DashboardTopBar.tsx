@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useDashboardView } from '../contexts/DashboardViewContext';
-import { api } from '../lib/api';
 import {
-  readDashboardControlsOpen,
-  writeDashboardControlsOpen,
-} from '../lib/dashboardPreferences';
+  GridViewIcon,
+  ListViewIcon,
+  useDashboardView,
+} from '../contexts/DashboardViewContext';
+import { api } from '../lib/api';
 import { getBrowserOverlayUrl } from '../lib/overlay';
 
 type ToolbarToastVariant = 'error' | 'success';
@@ -17,11 +17,11 @@ const TOAST_CLASS: Record<ToolbarToastVariant, string> = {
 };
 
 export default function DashboardTopBar() {
-  const { gridMode } = useDashboardView();
+  const { gridMode, setGridModePersisted } = useDashboardView();
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get('search') ?? '';
   const [stoppingAll, setStoppingAll] = useState(false);
-  const [controlsOpen, setControlsOpen] = useState(readDashboardControlsOpen);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [playbackVolume, setPlaybackVolume] = useState(75);
   const [globalVolumeSaving, setGlobalVolumeSaving] = useState(false);
   const [stageClientCount, setStageClientCount] = useState<number | null>(null);
@@ -54,10 +54,6 @@ export default function DashboardTopBar() {
     },
     [setSearchParams],
   );
-
-  useEffect(() => {
-    writeDashboardControlsOpen(controlsOpen);
-  }, [controlsOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,6 +151,21 @@ export default function DashboardTopBar() {
         >
           <StopIcon />
           {stoppingAll ? 'Stopping...' : 'Stop all'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setGridModePersisted((current) => !current)}
+          aria-pressed={gridMode}
+          aria-label={gridMode ? 'Switch to standard view' : 'Switch to grid view'}
+          title={gridMode ? 'Standard view' : 'Grid view'}
+          className={
+            'flex shrink-0 items-center justify-center rounded-md border px-3 py-2 ' +
+            (gridMode
+              ? 'border-accent bg-accent/15 text-text hover:bg-accent/25'
+              : 'border-surface text-text-muted hover:border-accent hover:text-text')
+          }
+        >
+          {gridMode ? <ListViewIcon /> : <GridViewIcon />}
         </button>
         <button
           type="button"
@@ -256,13 +267,7 @@ export default function DashboardTopBar() {
             document.body,
           )
         : null}
-      {gridMode ? (
-        <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen max-w-[100vw]">
-          {bar}
-        </div>
-      ) : (
-        <div className="mx-auto max-w-6xl">{bar}</div>
-      )}
+      {bar}
     </>
   );
 }

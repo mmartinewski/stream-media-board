@@ -710,14 +710,7 @@ export default function DashboardPage() {
           )
         : null}
 
-      <section
-        className={
-          'space-y-6 ' +
-          (gridMode
-            ? 'relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen max-w-[100vw] px-3 sm:px-4'
-            : '')
-        }
-      >
+      <section className="w-full space-y-6">
       {sections.map((section, idx) => (
         <article
           key={idx}
