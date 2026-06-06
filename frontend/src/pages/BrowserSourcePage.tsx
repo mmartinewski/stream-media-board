@@ -4,6 +4,8 @@ import { getBrowserSourceEventsUrl } from '../lib/overlay';
 import { parseBrowserSourceMode } from '../lib/videoOrientation';
 import { effectiveVolumeToElement } from '../lib/volume';
 import { computeVideoSlotLayout, type LayoutAreaDto, type VideoSlotLayout } from '../lib/layoutSlot';
+import TodoOverlayLayer from '../components/TodoOverlayLayer';
+import type { TodoListOverlayDto } from '../lib/todoOverlay';
 
 interface BrowserSourcePlayEvent {
   type: 'play';
@@ -21,7 +23,28 @@ interface BrowserSourceStopEvent {
   type: 'stop';
 }
 
-type BrowserSourceSseEvent = BrowserSourcePlayEvent | BrowserSourceStopEvent;
+interface BrowserSourceTodoShowEvent {
+  type: 'todo_show';
+  list: TodoListOverlayDto;
+}
+
+interface BrowserSourceTodoHideEvent {
+  type: 'todo_hide';
+}
+
+interface BrowserSourceTodoSyncEvent {
+  type: 'todo_sync';
+  list: TodoListOverlayDto;
+}
+
+type BrowserSourceSseEvent =
+  | BrowserSourcePlayEvent
+  | BrowserSourceStopEvent
+  | BrowserSourceTodoShowEvent
+  | BrowserSourceTodoHideEvent
+  | BrowserSourceTodoSyncEvent;
+
+type TodoPhase = 'hidden' | 'entering' | 'visible' | 'exiting';
 
 const FADE_MS = 400;
 const FADE_OUT_LEAD_SEC = FADE_MS / 1000 + 0.1;
@@ -61,6 +84,12 @@ export default function BrowserSourcePage() {
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState('connecting');
   const [videoSlotLayout, setVideoSlotLayout] = useState<VideoSlotLayout | null>(null);
+  const [todoList, setTodoList] = useState<TodoListOverlayDto | null>(null);
+  const [todoEnterList, setTodoEnterList] = useState<TodoListOverlayDto | null>(null);
+  const [todoPhase, setTodoPhase] = useState<TodoPhase>('hidden');
+  const todoListRef = useRef<TodoListOverlayDto | null>(null);
+  const todoPhaseRef = useRef<TodoPhase>('hidden');
+  const pendingTodoListRef = useRef<TodoListOverlayDto | null>(null);
   const fadeOutFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeOutStartedRef = useRef(false);
   const detachEndWatchRef = useRef<(() => void) | null>(null);
@@ -76,6 +105,14 @@ export default function BrowserSourcePage() {
     detachEndWatchRef.current?.();
     detachEndWatchRef.current = null;
   }, []);
+
+  useEffect(() => {
+    todoPhaseRef.current = todoPhase;
+  }, [todoPhase]);
+
+  useEffect(() => {
+    todoListRef.current = todoList;
+  }, [todoList]);
 
   const clearVideo = useCallback(() => {
     const video = videoRef.current;
@@ -103,6 +140,63 @@ export default function BrowserSourcePage() {
     clearAudio();
     setVideoSlotLayout(null);
   }, [clearAudio, clearFadeOutFallback, clearVideo, detachEndWatch]);
+
+  const showTodoList = useCallback((list: TodoListOverlayDto) => {
+    const current = todoListRef.current;
+    const phase = todoPhaseRef.current;
+
+    if (
+      current?.id === list.id &&
+      (phase === 'visible' || phase === 'entering')
+    ) {
+      setTodoList(list);
+      return;
+    }
+
+    if (!current || phase === 'hidden') {
+      pendingTodoListRef.current = null;
+      setTodoEnterList(null);
+      setTodoList(list);
+      setTodoPhase('entering');
+      return;
+    }
+
+    pendingTodoListRef.current = list;
+    if (phase !== 'exiting') {
+      setTodoPhase('exiting');
+    }
+  }, []);
+
+  const completeTodoEnter = useCallback(() => {
+    setTodoPhase('visible');
+    setTodoEnterList(null);
+  }, []);
+
+  const hideTodoComplete = useCallback(() => {
+    const pending = pendingTodoListRef.current;
+    if (pending) {
+      pendingTodoListRef.current = null;
+      setTodoEnterList(pending);
+      setTodoList(null);
+      setTodoPhase('hidden');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTodoList(pending);
+          setTodoPhase('entering');
+        });
+      });
+      return;
+    }
+    setTodoEnterList(null);
+    setTodoList(null);
+    setTodoPhase('hidden');
+  }, []);
+
+  const startTodoHide = useCallback(() => {
+    pendingTodoListRef.current = null;
+    setTodoEnterList(null);
+    setTodoPhase((current) => (current === 'hidden' ? current : 'exiting'));
+  }, []);
 
   const finishFadeOut = useCallback(() => {
     clearFadeOutFallback();
@@ -261,6 +355,22 @@ export default function BrowserSourcePage() {
         return;
       }
 
+      if (event.type === 'todo_show') {
+        showTodoList(event.list);
+        return;
+      }
+
+      if (event.type === 'todo_hide') {
+        startTodoHide();
+        return;
+      }
+
+      if (event.type === 'todo_sync') {
+        setTodoList(event.list);
+        setTodoPhase((current) => (current === 'hidden' ? 'visible' : current));
+        return;
+      }
+
       if (event.type !== 'play' || !event.mediaUrl) return;
 
       if (isAudioPlayEvent(event)) {
@@ -279,7 +389,7 @@ export default function BrowserSourcePage() {
       source.close();
       detachEndWatch();
     };
-  }, [mode, playAudioClip, playVideoClip, stopAllPlayback, detachEndWatch]);
+  }, [mode, playAudioClip, playVideoClip, showTodoList, startTodoHide, stopAllPlayback, detachEndWatch]);
 
   const handleVideoEnded = () => {
     if (!fadeOutStartedRef.current) {
@@ -351,6 +461,13 @@ export default function BrowserSourcePage() {
           />
         </div>
       </MotionStageInner>
+      <TodoOverlayLayer
+        list={todoList}
+        enterList={todoEnterList}
+        phase={todoPhase}
+        onEnterComplete={completeTodoEnter}
+        onExitComplete={hideTodoComplete}
+      />
       {import.meta.env.DEV ? (
         <p className="browser-source-debug" aria-hidden="true">
           {status}

@@ -49,7 +49,7 @@ function BrowserSourceInstructionsCard({
         {editorKind === 'audio' ? (
           <>
             Audio clips play on a browser overlay in your streaming app when you click them on the
-            dashboard. Add a source with{' '}
+            Media Board. Add a source with{' '}
             <span className="font-medium text-text">?mode=audio</span> for audio only (or{' '}
             <span className="font-medium text-text">universal</span> for a single overlay for
             everything).
@@ -1922,7 +1922,7 @@ export default function ClipFormPage({ mode }: Props) {
                 ))}
               </select>
               <span className="mt-1 block text-xs text-text-muted">
-                Used when you play this clip from the dashboard (▶). Use Play in… in the clip
+                Used when you play this clip from the Media Board (▶). Use Play in… in the clip
                 menu for a one-time override.
               </span>
             </p>

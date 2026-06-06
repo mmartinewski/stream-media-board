@@ -69,6 +69,7 @@ export interface BrowserSourceStatusResponse {
   connected_clients: number;
   clients_by_mode: Record<string, number>;
   overlay_paths: Record<string, string>;
+  active_todo_list_id?: number | null;
 }
 
 export interface PrefetchResponse {
@@ -345,4 +346,154 @@ export const api = {
     request<{ status: 'deleted'; id: number }>(`/api/clips/${id}`, {
       method: 'DELETE',
     }),
+  getTodoLists: () =>
+    request<import('./todoOverlay').TodoListsIndexResponse>('/api/todo-lists'),
+  getTodoList: (id: number) =>
+    request<import('./todoOverlay').TodoListDetailDto>(`/api/todo-lists/${id}`),
+  createTodoList: (body: import('./todoOverlay').TodoListInput) =>
+    request<import('./todoOverlay').TodoListDetailDto>('/api/todo-lists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  updateTodoList: (id: number, body: import('./todoOverlay').TodoListInput) =>
+    request<import('./todoOverlay').TodoListDetailDto>(`/api/todo-lists/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  deleteTodoList: (id: number) =>
+    request<{ status: string; id: number }>(`/api/todo-lists/${id}`, {
+      method: 'DELETE',
+    }),
+  showTodoList: (id: number) =>
+    request<{ status: string; active_todo_list_id: number }>(
+      `/api/todo-lists/${id}/show`,
+      { method: 'POST' },
+    ),
+  hideTodoList: () =>
+    request<{ status: string; active_todo_list_id: number | null }>(
+      '/api/todo-lists/hide',
+      { method: 'POST' },
+    ),
+  createTodoGroup: (
+    listId: number,
+    body: { title: string; sort_order?: number; column_id?: number },
+  ) =>
+    request<import('./todoOverlay').TodoGroupDto>(`/api/todo-lists/${listId}/groups`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  createTodoColumn: (listId: number, body?: { sort_order?: number }) =>
+    request<import('./todoOverlay').TodoColumnDto>(`/api/todo-lists/${listId}/columns`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    }),
+  updateTodoColumn: (
+    listId: number,
+    columnId: number,
+    body: { sort_order?: number; visible?: boolean },
+  ) =>
+    request<import('./todoOverlay').TodoColumnDto>(
+      `/api/todo-lists/${listId}/columns/${columnId}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    ),
+  deleteTodoColumn: (listId: number, columnId: number) =>
+    request<{ status: string; id: number }>(
+      `/api/todo-lists/${listId}/columns/${columnId}`,
+      { method: 'DELETE' },
+    ),
+  updateTodoGroup: (
+    listId: number,
+    groupId: number,
+    body: { title?: string; sort_order?: number; column_id?: number; visible?: boolean },
+  ) =>
+    request<import('./todoOverlay').TodoGroupDto>(
+      `/api/todo-lists/${listId}/groups/${groupId}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    ),
+  deleteTodoGroup: (listId: number, groupId: number) =>
+    request<{ status: string; id: number }>(
+      `/api/todo-lists/${listId}/groups/${groupId}`,
+      { method: 'DELETE' },
+    ),
+  createTodoItem: (
+    listId: number,
+    groupId: number,
+    body: { title: string; sort_order?: number; completed?: boolean },
+  ) =>
+    request<import('./todoOverlay').TodoItemDto>(
+      `/api/todo-lists/${listId}/groups/${groupId}/items`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    ),
+  updateTodoItem: (
+    listId: number,
+    itemId: number,
+    body: { title?: string; sort_order?: number; completed?: boolean; group_id?: number },
+  ) =>
+    request<import('./todoOverlay').TodoItemDto>(
+      `/api/todo-lists/${listId}/items/${itemId}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    ),
+  deleteTodoItem: (listId: number, itemId: number) =>
+    request<{ status: string; id: number }>(
+      `/api/todo-lists/${listId}/items/${itemId}`,
+      { method: 'DELETE' },
+    ),
+  uploadTodoBackground: (id: number, file: File) => {
+    const form = new FormData();
+    form.append('background', file);
+    return request<import('./todoOverlay').TodoListDetailDto>(
+      `/api/todo-lists/${id}/background`,
+      { method: 'POST', body: form },
+    );
+  },
+  deleteTodoBackground: (id: number) =>
+    request<import('./todoOverlay').TodoListDetailDto>(`/api/todo-lists/${id}/background`, {
+      method: 'DELETE',
+    }),
+  uploadTodoGroupThumbnail: (listId: number, groupId: number, file: File) => {
+    const form = new FormData();
+    form.append('thumbnail', file);
+    return request<import('./todoOverlay').TodoGroupDto>(
+      `/api/todo-lists/${listId}/groups/${groupId}/thumbnail`,
+      { method: 'POST', body: form },
+    );
+  },
+  deleteTodoGroupThumbnail: (listId: number, groupId: number) =>
+    request<import('./todoOverlay').TodoGroupDto>(
+      `/api/todo-lists/${listId}/groups/${groupId}/thumbnail`,
+      { method: 'DELETE' },
+    ),
+  uploadTodoItemThumbnail: (listId: number, itemId: number, file: File) => {
+    const form = new FormData();
+    form.append('thumbnail', file);
+    return request<import('./todoOverlay').TodoItemDto>(
+      `/api/todo-lists/${listId}/items/${itemId}/thumbnail`,
+      { method: 'POST', body: form },
+    );
+  },
+  deleteTodoItemThumbnail: (listId: number, itemId: number) =>
+    request<import('./todoOverlay').TodoItemDto>(
+      `/api/todo-lists/${listId}/items/${itemId}/thumbnail`,
+      { method: 'DELETE' },
+    ),
 };

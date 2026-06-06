@@ -36,6 +36,8 @@ The clip form (**Video clip**) lists all overlay URLs with **Copy** buttons when
 
 Each overlay listens for play events over SSE (`/api/browser-source/events?mode=...`). When you click a matching clip on the dashboard, that source plays it (video fades in/out; audio is invisible but audible).
 
+> **Todo lists (planned):** Registerable to-do lists with themed UI and show/hide animations will use the same overlay page on **`?mode=stage`** or **`?mode=universal`**. The list **stays visible until you hide it** from the dashboard; clip play/stop does not remove it (list and clips can appear together). Setup and API are specified in [todo-lists-overlay.md](./todo-lists-overlay.md) (draft).
+
 ---
 
 ## OBS Studio

@@ -3,6 +3,7 @@ import {
   ensureLayoutAreasSchema,
   seedLayoutAreasIfEmpty,
 } from './repositories/layoutAreas.js';
+import { ensureTodoListsSchema } from './repositories/todoLists.js';
 
 // IMPORTANT: keep this in sync with `schema.sql` in the same folder.
 // The `.sql` file is the human reference; this DDL is what actually runs.
@@ -62,6 +63,7 @@ export function migrate(db: BetterDatabase): void {
   ).run();
   ensureLayoutAreasSchema(db);
   seedLayoutAreasIfEmpty(db);
+  ensureTodoListsSchema(db);
 }
 
 function ensureColumn(

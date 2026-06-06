@@ -7,6 +7,7 @@ import {
 } from './videoOrientation.js';
 
 import type { LayoutAreaDto } from './layoutAreaTypes.js';
+import type { TodoListOverlayDto } from './todoListTypes.js';
 
 export interface BrowserSourcePlayEvent {
   type: 'play';
@@ -24,9 +25,26 @@ export interface BrowserSourceStopEvent {
   type: 'stop';
 }
 
-export type BrowserSourceSseEvent = BrowserSourcePlayEvent | BrowserSourceStopEvent;
+export interface BrowserSourceTodoShowEvent {
+  type: 'todo_show';
+  list: TodoListOverlayDto;
+}
 
-type BrowserSourceEvent = BrowserSourceSseEvent;
+export interface BrowserSourceTodoHideEvent {
+  type: 'todo_hide';
+}
+
+export interface BrowserSourceTodoSyncEvent {
+  type: 'todo_sync';
+  list: TodoListOverlayDto;
+}
+
+export type BrowserSourceSseEvent =
+  | BrowserSourcePlayEvent
+  | BrowserSourceStopEvent
+  | BrowserSourceTodoShowEvent
+  | BrowserSourceTodoHideEvent
+  | BrowserSourceTodoSyncEvent;
 
 interface SseClient {
   id: number;
@@ -36,6 +54,20 @@ interface SseClient {
 
 let nextClientId = 1;
 const clients = new Map<number, SseClient>();
+let activeTodoListId: number | null = null;
+let activeTodoListSnapshot: TodoListOverlayDto | null = null;
+
+export function browserSourceModeAcceptsTodo(mode: BrowserSourceMode): boolean {
+  return mode === 'stage' || mode === 'universal';
+}
+
+export function getActiveTodoListId(): number | null {
+  return activeTodoListId;
+}
+
+export function setActiveTodoListId(id: number | null): void {
+  activeTodoListId = id;
+}
 
 export function subscribeBrowserSource(res: Response, modeRaw: unknown): void {
   const mode = parseBrowserSourceMode(modeRaw);
@@ -49,6 +81,14 @@ export function subscribeBrowserSource(res: Response, modeRaw: unknown): void {
   });
   res.write(': connected\n\n');
 
+  if (activeTodoListSnapshot && browserSourceModeAcceptsTodo(mode)) {
+    const replay = JSON.stringify({
+      type: 'todo_show',
+      list: activeTodoListSnapshot,
+    } satisfies BrowserSourceTodoShowEvent);
+    res.write(`data: ${replay}\n\n`);
+  }
+
   const heartbeat = setInterval(() => {
     res.write(': heartbeat\n\n');
   }, 25_000);
@@ -57,6 +97,13 @@ export function subscribeBrowserSource(res: Response, modeRaw: unknown): void {
     clearInterval(heartbeat);
     clients.delete(id);
   });
+}
+
+function writeToTodoClients(payload: string): void {
+  for (const client of clients.values()) {
+    if (!browserSourceModeAcceptsTodo(client.mode)) continue;
+    client.res.write(`data: ${payload}\n\n`);
+  }
 }
 
 export function publishBrowserSourceStopAll(): void {
@@ -74,6 +121,33 @@ export function publishBrowserSourceEvent(event: BrowserSourcePlayEvent): void {
     }
     client.res.write(`data: ${payload}\n\n`);
   }
+}
+
+export function publishBrowserSourceTodoShow(list: TodoListOverlayDto): void {
+  activeTodoListId = list.id;
+  activeTodoListSnapshot = list;
+  const payload = JSON.stringify({
+    type: 'todo_show',
+    list,
+  } satisfies BrowserSourceTodoShowEvent);
+  writeToTodoClients(payload);
+}
+
+export function publishBrowserSourceTodoHide(): void {
+  activeTodoListId = null;
+  activeTodoListSnapshot = null;
+  const payload = JSON.stringify({ type: 'todo_hide' } satisfies BrowserSourceTodoHideEvent);
+  writeToTodoClients(payload);
+}
+
+export function publishBrowserSourceTodoSync(list: TodoListOverlayDto): void {
+  if (activeTodoListId !== list.id) return;
+  activeTodoListSnapshot = list;
+  const payload = JSON.stringify({
+    type: 'todo_sync',
+    list,
+  } satisfies BrowserSourceTodoSyncEvent);
+  writeToTodoClients(payload);
 }
 
 export function browserSourceClientsForEvent(event: BrowserSourcePlayEvent): number {

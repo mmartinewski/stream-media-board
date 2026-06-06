@@ -2,7 +2,7 @@
 
 **Status:** **v0.8.0+** — Layout Stage shipped through Phase D (stage mode, areas CRUD, visual editor, per-clip default area).  
 **Audience:** Implementers and reviewers.  
-**Related:** [browser-source-setup.md](./browser-source-setup.md) (current OBS workflow), [technical-specification.md](./technical-specification.md) (v1 app overview).
+**Related:** [browser-source-setup.md](./browser-source-setup.md) (current OBS workflow), [technical-specification.md](./technical-specification.md) (v1 app overview), [todo-lists-overlay.md](./todo-lists-overlay.md) (planned to-do lists on the same stage overlay).
 
 ---
 

@@ -238,7 +238,7 @@ export default function LayoutAreasPage() {
         <div className="rounded-md border border-surface bg-surface-soft p-4">
           <h2 className="text-base font-semibold">Display defaults by orientation</h2>
           <p className="mt-1 text-xs text-text-muted">
-            Default layout area when you play a clip from the dashboard (unless you override per
+            Default layout area when you play a clip from the Media Board (unless you override per
             card).
           </p>
 
@@ -348,7 +348,7 @@ export default function LayoutAreasPage() {
           Restore defaults
         </button>
         <Link to="/" className="rounded-md border border-surface px-4 py-2 text-sm">
-          Back to dashboard
+          Back to Media Board
         </Link>
       </div>
 

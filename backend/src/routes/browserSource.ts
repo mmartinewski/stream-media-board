@@ -6,6 +6,7 @@ import { HttpError } from '../middleware/errorHandler.js';
 import {
   browserSourceClientCount,
   browserSourceClientCountByMode,
+  getActiveTodoListId,
   publishBrowserSourceEvent,
   subscribeBrowserSource,
 } from '../services/browserSourceHub.js';
@@ -24,6 +25,7 @@ export function browserSourceRouter(paths: AppPaths): Router {
     res.json({
       connected_clients: browserSourceClientCount(),
       clients_by_mode: browserSourceClientCountByMode(),
+      active_todo_list_id: getActiveTodoListId(),
       test_media_filename: TEST_MEDIA_FILENAME,
       overlay_path: '/overlay/browser',
       overlay_paths: {

@@ -1278,7 +1278,7 @@ export default function DashboardPage() {
               Edit metadata
             </h2>
             <p className="mt-1 text-sm text-text-muted">
-              Update title, category, and tags without leaving the dashboard.
+              Update title, category, and tags without leaving the Media Board.
             </p>
 
             <div className="mt-4 space-y-3">
@@ -1338,7 +1338,7 @@ export default function DashboardPage() {
                     ))}
                   </select>
                   <p className="mt-1 text-xs text-text-muted">
-                    Used when you press ▶ on the dashboard. Override once via Play in… in the
+                    Used when you press ▶ on the Media Board. Override once via Play in… in the
                     clip menu.
                   </p>
                 </div>

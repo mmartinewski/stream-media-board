@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', end: true },
+  { to: '/', label: 'Media Board', end: true },
+  { to: '/checklists', label: 'Checklists', end: false },
   { to: '/settings/layout-areas', label: 'Layout areas', end: false },
-  { to: '/clips/new', label: 'New clip', end: false },
 ] as const;
 
 export default function AppSideMenu() {
@@ -35,9 +35,9 @@ export default function AppSideMenu() {
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label="Open navigation menu"
-        className="rounded-md border border-surface px-2.5 py-2 text-lg leading-none text-text-muted hover:border-accent hover:text-text"
+        className="flex shrink-0 items-center justify-center rounded-md border border-surface px-2.5 py-2 text-text-muted hover:border-accent hover:text-text"
       >
-        ⋮
+        <MenuIcon />
       </button>
       {open
         ? createPortal(
@@ -52,7 +52,7 @@ export default function AppSideMenu() {
                 role="dialog"
                 aria-modal="true"
                 aria-label="Navigation"
-                className="fixed inset-y-0 right-0 z-[61] flex w-72 max-w-[85vw] flex-col border-l border-surface bg-bg shadow-2xl"
+                className="fixed inset-y-0 left-0 z-[61] flex w-72 max-w-[85vw] flex-col border-r border-surface bg-bg shadow-2xl"
               >
                 <div className="flex items-center justify-between border-b border-surface/50 px-4 py-3">
                   <span className="text-sm font-semibold">Menu</span>
@@ -93,5 +93,18 @@ export default function AppSideMenu() {
           )
         : null}
     </>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 7h16M4 12h16M4 17h16"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }

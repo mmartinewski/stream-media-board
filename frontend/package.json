@@ -1,7 +1,7 @@
 {
   "name": "@app/frontend",
   "private": true,
-  "version": "0.12.0",
+  "version": "0.13.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,6 +10,29 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@fontsource/almendra": "^5.2.8",
+    "@fontsource/audiowide": "^5.2.7",
+    "@fontsource/bebas-neue": "^5.2.7",
+    "@fontsource/black-ops-one": "^5.2.8",
+    "@fontsource/bungee": "^5.2.7",
+    "@fontsource/cinzel": "^5.2.8",
+    "@fontsource/cinzel-decorative": "^5.2.8",
+    "@fontsource/creepster": "^5.2.7",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/medievalsharp": "^5.2.8",
+    "@fontsource/metal-mania": "^5.2.7",
+    "@fontsource/metamorphous": "^5.2.8",
+    "@fontsource/montserrat": "^5.2.8",
+    "@fontsource/new-rocker": "^5.2.7",
+    "@fontsource/orbitron": "^5.2.8",
+    "@fontsource/oswald": "^5.2.8",
+    "@fontsource/pirata-one": "^5.2.8",
+    "@fontsource/poppins": "^5.2.7",
+    "@fontsource/press-start-2p": "^5.2.7",
+    "@fontsource/rajdhani": "^5.2.7",
+    "@fontsource/righteous": "^5.2.7",
+    "@fontsource/roboto": "^5.2.10",
+    "@fontsource/uncial-antiqua": "^5.2.7",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-router-dom": "^6.24.0"

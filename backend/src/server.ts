@@ -21,7 +21,7 @@ export async function startBackendServer(): Promise<BackendServer> {
   ensureAppDataDirs(paths);
 
   initLogger(paths.logFile);
-  logger.info('starting Personal Clip Player', {
+  logger.info('starting Stream Media Board', {
     appData: paths.appData,
     ytDlpNode: paths.ytDlpNodeExe ?? '(not found)',
   });

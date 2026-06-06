@@ -143,6 +143,12 @@ export default function DashboardTopBar() {
             className="w-full rounded-md border border-surface bg-bg-soft py-2 pl-9 pr-3 text-sm outline-none focus:border-accent"
           />
         </div>
+        <Link
+          to="/clips/new"
+          className="shrink-0 rounded-md bg-accent px-4 py-2 text-sm font-medium text-bg hover:opacity-90"
+        >
+          New clip
+        </Link>
         <button
           type="button"
           onClick={() => void handleStopAll()}

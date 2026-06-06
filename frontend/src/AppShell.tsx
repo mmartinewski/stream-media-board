@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import AppSideMenu from './components/AppSideMenu';
 import DashboardTopBar from './components/DashboardTopBar';
 import { DashboardViewProvider } from './contexts/DashboardViewContext';
+import { APP_DISPLAY_NAME } from './lib/appName';
 
 function shellContentClass(fullWidth: boolean) {
   return fullWidth
@@ -13,13 +14,13 @@ function AppShellHeader({ fullWidth }: { fullWidth: boolean }) {
   return (
     <div
       className={
-        'flex items-center justify-between py-4 ' + shellContentClass(fullWidth)
+        'flex items-center gap-3 py-4 ' + shellContentClass(fullWidth)
       }
     >
-      <Link to="/" className="text-lg font-semibold tracking-tight">
-        Personal Clip Player
-      </Link>
       <AppSideMenu />
+      <Link to="/" className="text-lg font-semibold tracking-tight">
+        {APP_DISPLAY_NAME}
+      </Link>
     </div>
   );
 }

@@ -4,6 +4,8 @@ import BrowserSourcePage from './pages/BrowserSourcePage';
 import DashboardPage from './pages/DashboardPage';
 import ClipFormPage from './pages/ClipFormPage';
 import LayoutAreasPage from './pages/LayoutAreasPage';
+import ChecklistsListPage from './pages/ChecklistsListPage';
+import ChecklistEditorPage from './pages/ChecklistEditorPage';
 
 export default function App() {
   return (
@@ -11,6 +13,8 @@ export default function App() {
       <Route path="/overlay/browser" element={<BrowserSourcePage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/checklists" element={<ChecklistsListPage />} />
+        <Route path="/checklists/:id" element={<ChecklistEditorPage mode="edit" />} />
         <Route path="/clips/new" element={<ClipFormPage mode="create" />} />
         <Route path="/clips/:id/edit" element={<ClipFormPage mode="edit" />} />
         <Route path="/settings/layout-areas" element={<LayoutAreasPage />} />
