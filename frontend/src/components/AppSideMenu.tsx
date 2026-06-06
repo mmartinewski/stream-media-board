@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
+import { APP_DISPLAY_NAME } from '../lib/appName';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Media Board', end: true },
@@ -55,7 +56,7 @@ export default function AppSideMenu() {
                 className="fixed inset-y-0 left-0 z-[61] flex w-72 max-w-[85vw] flex-col border-r border-surface bg-bg shadow-2xl"
               >
                 <div className="flex items-center justify-between border-b border-surface/50 px-4 py-3">
-                  <span className="text-sm font-semibold">Menu</span>
+                  <span className="text-sm font-semibold">{APP_DISPLAY_NAME}</span>
                   <button
                     type="button"
                     onClick={close}

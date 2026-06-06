@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import ChecklistTrashButton from '../components/ChecklistTrashButton';
 import ChecklistVisibilityToggle from '../components/ChecklistVisibilityToggle';
 import { useTopCenterToast } from '../components/TopCenterToast';
+import TodoChecklistPanel from '../components/TodoChecklistPanel';
 import TodoThumbnailDropzone from '../components/TodoThumbnailDropzone';
 import { api } from '../lib/api';
 import {
@@ -33,6 +34,10 @@ import {
   setDragId,
 } from '../lib/checklistDragDrop';
 import {
+  startChecklistDragAutoScroll,
+  stopChecklistDragAutoScroll,
+} from '../lib/checklistDragAutoScroll';
+import {
   computeItemSortOrder,
   getInsertIndicatorTop,
   isItemDragNoOp,
@@ -56,14 +61,10 @@ import AnchorPicker from '../components/layout/AnchorPicker';
 import {
   TODO_ANIMATIONS,
   filterVisibleTodoColumns,
-  isTodoItemCompleted,
   isTodoOverlayVisible,
-  resolveTodoThumbnailUrl,
   todoAnimationDataAttrs,
   todoAnimationLabel,
-  todoColumnsStyle,
   todoPanelAnchorAttrs,
-  todoPanelBgMode,
   todoPanelStyle,
   type TodoAnimationId,
   type TodoBackgroundMode,
@@ -410,6 +411,10 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
     applyListDetail(listRes);
     setActiveId(indexRes.active_todo_list_id);
   }, [applyListDetail, listId]);
+
+  useEffect(() => {
+    return () => stopChecklistDragAutoScroll();
+  }, []);
 
   useEffect(() => {
     if (mode === 'create') {
@@ -889,6 +894,7 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
   };
 
   const finishGroupDrag = () => {
+    stopChecklistDragAutoScroll();
     if (!groupDropHandledRef.current) clearDragOver();
     groupDropHandledRef.current = false;
   };
@@ -979,6 +985,7 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
   };
 
   const finishItemDrag = () => {
+    stopChecklistDragAutoScroll();
     if (!itemDropHandledRef.current) clearDragOver();
     itemDropHandledRef.current = false;
   };
@@ -1001,7 +1008,7 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
   return (
     <>
       {toastPortal}
-      <div className="mx-auto max-w-6xl px-4 pb-8">
+      <div className="w-full max-w-6xl pb-8">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <Link to="/checklists" className="text-sm text-text-muted hover:text-accent">
@@ -1689,6 +1696,7 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
                         <DragHandle
                           label="Drag group to reorder or move to another column"
                           onDragStart={(event) => {
+                            startChecklistDragAutoScroll();
                             groupDropHandledRef.current = false;
                             setDragId(event.dataTransfer, CHECKLIST_GROUP_DRAG, group.id);
                             groupDragSourceColumnRef.current = column.id;
@@ -1790,6 +1798,7 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
                             <DragHandle
                               label="Drag item to reorder or move to another group"
                               onDragStart={(event) => {
+                                startChecklistDragAutoScroll();
                                 itemDropHandledRef.current = false;
                                 setDragId(event.dataTransfer, CHECKLIST_ITEM_DRAG, item.id);
                                 itemDragSourceGroupRef.current = group.id;
@@ -1868,6 +1877,11 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
                           onChange={(e) =>
                             setNewItemTitles((prev) => ({ ...prev, [group.id]: e.target.value }))
                           }
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter') return;
+                            e.preventDefault();
+                            void addItem(group.id).catch((err) => showError(String(err)));
+                          }}
                         />
                         <button
                           type="button"
@@ -1944,92 +1958,28 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
               aria-hidden="true"
             />
             {previewPhase !== 'hidden' ? (
-              <div
+              <TodoChecklistPanel
+                list={previewList}
+                preview
                 className={
-                  'todo-panel ' +
-                  (previewPhase === 'entering'
+                  previewPhase === 'entering'
                     ? 'is-entering' + (previewEnterReady ? ' is-visible' : '')
                     : previewPhase === 'visible'
                       ? 'is-visible'
-                      : 'is-exiting')
+                      : 'is-exiting'
                 }
                 style={todoPanelStyle(previewList, { preview: true })}
-                data-todo-bg-mode={todoPanelBgMode(previewList)}
-                {...(previewPhase === 'exiting'
-                  ? todoAnimationDataAttrs(previewList.exit_animation)
-                  : todoAnimationDataAttrs(previewList.enter_animation))}
+                animAttrs={
+                  previewPhase === 'exiting'
+                    ? todoAnimationDataAttrs(previewList.exit_animation)
+                    : todoAnimationDataAttrs(previewList.enter_animation)
+                }
                 onTransitionEnd={handlePreviewTransitionEnd}
-              >
-                <div className="todo-bg" aria-hidden="true" />
-                <div className="todo-content">
-                  <h2 className="todo-title">{previewList.title}</h2>
-                  <div className="todo-scroll">
-                    <div className="todo-scroll-spacer" aria-hidden="true" />
-                    <div className="todo-scroll-body">
-                      <div
-                        className="todo-columns"
-                        style={todoColumnsStyle(previewList.columns.length)}
-                      >
-                        {previewList.columns.map((column) => (
-                          <div key={column.id} className="todo-column">
-                            {column.groups.map((group) => {
-                              const groupThumbSrc = resolveTodoThumbnailUrl(
-                                group.thumbnail_url,
-                                groupThumbCacheBust[group.id],
-                              );
-                              return (
-                                <section key={group.id} className="todo-group">
-                                  <div className="todo-group-header">
-                                    {groupThumbSrc ? (
-                                      <img
-                                        className="todo-group-thumb"
-                                        src={groupThumbSrc}
-                                        alt=""
-                                      />
-                                    ) : null}
-                                    <h3 className="todo-group-title" title={group.title}>
-                                      {group.title}
-                                    </h3>
-                                  </div>
-                                  <ul className="todo-items">
-                                    {group.items.map((item) => {
-                                      const itemThumbSrc = resolveTodoThumbnailUrl(
-                                        item.thumbnail_url,
-                                        itemThumbCacheBust[item.id],
-                                      );
-                                      return (
-                                        <li
-                                          key={item.id}
-                                          className={
-                                            'todo-item' +
-                                            (isTodoItemCompleted(item.completed)
-                                              ? ' is-completed'
-                                              : '')
-                                          }
-                                        >
-                                          {itemThumbSrc ? (
-                                            <img
-                                              className="todo-item-thumb"
-                                              src={itemThumbSrc}
-                                              alt=""
-                                            />
-                                          ) : null}
-                                          <span className="todo-item-title">{item.title}</span>
-                                        </li>
-                                      );
-                                    })}
-                                  </ul>
-                                </section>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="todo-scroll-spacer" aria-hidden="true" />
-                  </div>
-                </div>
-              </div>
+                thumbnailCacheBust={{
+                  groups: groupThumbCacheBust,
+                  items: itemThumbCacheBust,
+                }}
+              />
             ) : null}
           </div>
         ) : (

@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import TodoChecklistPanel from './TodoChecklistPanel';
 import {
   todoAnimationDataAttrs,
   filterVisibleTodoColumns,
-  isTodoItemCompleted,
-  todoColumnsStyle,
   todoPanelAnchorAttrs,
-  todoPanelBgMode,
   todoPanelStyle,
   type TodoListOverlayDto,
 } from '../lib/todoOverlay';
@@ -109,17 +107,16 @@ export default function TodoOverlayLayer({
   if (visibleColumns.length === 0) return null;
 
   const enterAnimList = enterList ?? list;
-  const panelStyleList = phase === 'entering' ? enterAnimList : list;
+  const styleList = phase === 'entering' ? enterAnimList : list;
 
-  const panelClass =
-    'todo-panel ' +
-    (phase === 'entering'
+  const phaseClass =
+    phase === 'entering'
       ? 'is-entering' + (enterReady ? ' is-visible' : '')
       : phase === 'visible'
         ? 'is-visible'
         : phase === 'exiting'
           ? 'is-exiting'
-          : '');
+          : '';
 
   const animAttrs =
     phase === 'exiting'
@@ -129,67 +126,14 @@ export default function TodoOverlayLayer({
   return (
     <div className="todo-overlay" aria-hidden={phase !== 'visible'}>
       <div className="todo-layer" {...todoPanelAnchorAttrs(list)}>
-        <div
+        <TodoChecklistPanel
           key={list.id}
-          className={panelClass}
-          style={todoPanelStyle(panelStyleList)}
-          data-todo-bg-mode={todoPanelBgMode(list)}
-          {...animAttrs}
+          list={list}
+          className={phaseClass}
+          style={todoPanelStyle(styleList)}
+          animAttrs={animAttrs}
           onTransitionEnd={handleTransitionEnd}
-        >
-          <div className="todo-bg" aria-hidden="true" />
-          <div className="todo-content">
-            <h2 className="todo-title">{list.title}</h2>
-            <div className="todo-scroll">
-              <div className="todo-scroll-spacer" aria-hidden="true" />
-              <div className="todo-scroll-body">
-              <div className="todo-columns" style={todoColumnsStyle(visibleColumns.length)}>
-                {visibleColumns.map((column) => (
-                    <div key={column.id} className="todo-column">
-                      {column.groups.map((group) => (
-                        <section key={group.id} className="todo-group">
-                          <div className="todo-group-header">
-                            {group.thumbnail_url ? (
-                              <img
-                                className="todo-group-thumb"
-                                src={group.thumbnail_url}
-                                alt=""
-                              />
-                            ) : null}
-                            <h3 className="todo-group-title" title={group.title}>
-                              {group.title}
-                            </h3>
-                          </div>
-                          <ul className="todo-items">
-                            {group.items.map((item) => (
-                              <li
-                                key={item.id}
-                                className={
-                                  'todo-item' +
-                                  (isTodoItemCompleted(item.completed) ? ' is-completed' : '')
-                                }
-                              >
-                                {item.thumbnail_url ? (
-                                  <img
-                                    className="todo-item-thumb"
-                                    src={item.thumbnail_url}
-                                    alt=""
-                                  />
-                                ) : null}
-                                <span className="todo-item-title">{item.title}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </section>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="todo-scroll-spacer" aria-hidden="true" />
-            </div>
-          </div>
-        </div>
+        />
       </div>
     </div>
   );

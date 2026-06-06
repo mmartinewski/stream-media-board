@@ -91,7 +91,7 @@ export default function ChecklistsListPage() {
   return (
     <>
       {toastPortal}
-      <div className="mx-auto max-w-3xl px-4">
+      <div className="w-full max-w-3xl pb-8">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Checklists</h1>
         <button

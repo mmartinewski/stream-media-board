@@ -246,7 +246,7 @@ body.browser-source-root #root {
   font-size: var(--todo-fs-title, 3.5rem);
   font-weight: 700;
   line-height: 1.1;
-  text-align: left;
+  text-align: center;
   color: var(--todo-color-title, #fff);
 }
 
@@ -725,15 +725,4 @@ body.browser-source-root #root {
   gap: 0.375rem;
   padding: 0.125rem 0;
   line-height: 1.25;
-}
-
-.todo-preview-panel .todo-columns {
-  flex-wrap: nowrap;
-}
-
-.todo-preview-panel .todo-column {
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: none;
-  padding: 0 0.375rem;
 }

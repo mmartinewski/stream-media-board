@@ -8,6 +8,7 @@ import {
 } from '../contexts/DashboardViewContext';
 import { api } from '../lib/api';
 import { getBrowserOverlayUrl } from '../lib/overlay';
+import { APP_SHELL_H_PADDING } from '../lib/appShellLayout';
 
 type ToolbarToastVariant = 'error' | 'success';
 
@@ -128,7 +129,7 @@ export default function DashboardTopBar() {
 
   const bar = (
     <div className="border-b border-surface/50 bg-bg/95 shadow-sm backdrop-blur">
-      <div className="flex flex-wrap items-center gap-2 p-3">
+      <div className={'flex flex-wrap items-center gap-2 py-3 ' + APP_SHELL_H_PADDING}>
         <div className="relative min-w-[10rem] flex-1">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
             <SearchIcon />
