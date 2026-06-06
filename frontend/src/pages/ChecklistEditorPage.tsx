@@ -1949,7 +1949,7 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
         </div>
         <div className="p-4 md:p-5">
         {previewList ? (
-          <div className="todo-preview-panel" {...todoPanelAnchorAttrs(previewList)}>
+          <div className="todo-preview-panel">
             <img
               className="todo-preview-gameplay"
               src={PREVIEW_GAMEPLAY_SRC}
@@ -1958,28 +1958,30 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
               aria-hidden="true"
             />
             {previewPhase !== 'hidden' ? (
-              <TodoChecklistPanel
-                list={previewList}
-                preview
-                className={
-                  previewPhase === 'entering'
-                    ? 'is-entering' + (previewEnterReady ? ' is-visible' : '')
-                    : previewPhase === 'visible'
-                      ? 'is-visible'
-                      : 'is-exiting'
-                }
-                style={todoPanelStyle(previewList, { preview: true })}
-                animAttrs={
-                  previewPhase === 'exiting'
-                    ? todoAnimationDataAttrs(previewList.exit_animation)
-                    : todoAnimationDataAttrs(previewList.enter_animation)
-                }
-                onTransitionEnd={handlePreviewTransitionEnd}
-                thumbnailCacheBust={{
-                  groups: groupThumbCacheBust,
-                  items: itemThumbCacheBust,
-                }}
-              />
+              <div className="todo-layer" {...todoPanelAnchorAttrs(previewList)}>
+                <TodoChecklistPanel
+                  list={previewList}
+                  preview
+                  className={
+                    previewPhase === 'entering'
+                      ? 'is-entering' + (previewEnterReady ? ' is-visible' : '')
+                      : previewPhase === 'visible'
+                        ? 'is-visible'
+                        : 'is-exiting'
+                  }
+                  style={todoPanelStyle(previewList, { preview: true })}
+                  animAttrs={
+                    previewPhase === 'exiting'
+                      ? todoAnimationDataAttrs(previewList.exit_animation)
+                      : todoAnimationDataAttrs(previewList.enter_animation)
+                  }
+                  onTransitionEnd={handlePreviewTransitionEnd}
+                  thumbnailCacheBust={{
+                    groups: groupThumbCacheBust,
+                    items: itemThumbCacheBust,
+                  }}
+                />
+              </div>
             ) : null}
           </div>
         ) : (

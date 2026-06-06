@@ -182,14 +182,11 @@ export function todoPanelAnchorAttrs(
   };
 }
 
-/** Widen columns when there are few, so item text can use horizontal space before wrapping. */
+/** Columns share the panel width equally (no fixed rem cap — matches preview and wide overlays). */
 export function todoColumnsStyle(columnCount: number): CSSProperties {
   const count = Math.max(1, columnCount);
-  if (count === 1) {
-    return { ['--todo-column-max' as string]: '100%' };
-  }
   return {
-    ['--todo-column-max' as string]: `min(28rem, calc(100% / ${count}))`,
+    ['--todo-column-max' as string]: `calc(100% / ${count})`,
   };
 }
 
