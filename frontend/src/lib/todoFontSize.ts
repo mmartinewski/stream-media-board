@@ -21,25 +21,25 @@ type FontSizeScale = {
 const OVERLAY_SCALES: Record<TodoFontSizeId, FontSizeScale> = {
   tiny: {
     title: '2rem',
-    group: '1.375rem',
+    group: '1.1875rem',
     item: '1.125rem',
     thumb: '1.5rem',
   },
   small: {
     title: '2.625rem',
-    group: '1.875rem',
+    group: '1.625rem',
     item: '1.5rem',
     thumb: '2.0625rem',
   },
   medium: {
     title: '3.5rem',
-    group: '2.5rem',
+    group: '2.125rem',
     item: '2rem',
     thumb: '2.75rem',
   },
   large: {
     title: '4.375rem',
-    group: '3.125rem',
+    group: '2.625rem',
     item: '2.5rem',
     thumb: '3.4375rem',
   },
@@ -48,25 +48,25 @@ const OVERLAY_SCALES: Record<TodoFontSizeId, FontSizeScale> = {
 const PREVIEW_SCALES: Record<TodoFontSizeId, FontSizeScale> = {
   tiny: {
     title: '0.5625rem',
-    group: '0.5rem',
+    group: '0.4375rem',
     item: '0.4375rem',
     thumb: '0.6875rem',
   },
   small: {
     title: '0.75rem',
-    group: '0.625rem',
+    group: '0.5625rem',
     item: '0.5625rem',
     thumb: '0.9375rem',
   },
   medium: {
     title: '1rem',
-    group: '0.8125rem',
+    group: '0.6875rem',
     item: '0.6875rem',
     thumb: '1.25rem',
   },
   large: {
     title: '1.25rem',
-    group: '1rem',
+    group: '0.875rem',
     item: '0.875rem',
     thumb: '1.5625rem',
   },
@@ -92,14 +92,15 @@ export function todoFontSizeFromIndex(index: number): TodoFontSizeId {
 export function todoFontSizeCssVars(
   size: TodoFontSizeId | undefined | null,
   context: 'overlay' | 'preview' = 'overlay',
+  titleSize?: TodoFontSizeId | undefined | null,
 ): Record<string, string> {
-  const scale = (context === 'preview' ? PREVIEW_SCALES : OVERLAY_SCALES)[
-    normalizeTodoFontSize(size)
-  ];
+  const scales = context === 'preview' ? PREVIEW_SCALES : OVERLAY_SCALES;
+  const bodyScale = scales[normalizeTodoFontSize(size)];
+  const titleScale = scales[normalizeTodoFontSize(titleSize ?? size)];
   return {
-    '--todo-fs-title': scale.title,
-    '--todo-fs-group': scale.group,
-    '--todo-fs-item': scale.item,
-    '--todo-fs-thumb': scale.thumb,
+    '--todo-fs-title': titleScale.title,
+    '--todo-fs-group': bodyScale.group,
+    '--todo-fs-item': bodyScale.item,
+    '--todo-fs-thumb': bodyScale.thumb,
   };
 }

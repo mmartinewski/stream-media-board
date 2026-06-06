@@ -52,12 +52,18 @@ export const TODO_PANEL_ANCHOR_HORIZONTALS = ['left', 'center', 'right'] as cons
 export type TodoPanelAnchorVertical = (typeof TODO_PANEL_ANCHOR_VERTICALS)[number];
 export type TodoPanelAnchorHorizontal = (typeof TODO_PANEL_ANCHOR_HORIZONTALS)[number];
 
+export const TODO_TITLE_ALIGNS = ['left', 'center', 'right'] as const;
+
+export type TodoTitleAlign = (typeof TODO_TITLE_ALIGNS)[number];
+
 export interface TodoListThemeDto {
   background_url: string | null;
   background_mode: TodoBackgroundMode;
   background_color: string;
   font_family: string;
   font_size: TodoFontSizeId;
+  title_font_size: TodoFontSizeId;
+  title_align: TodoTitleAlign;
   color_title: string;
   color_group: string;
   color_item: string;
@@ -76,6 +82,11 @@ export interface TodoListDetailDto {
   panel_max_height_percent: number;
   panel_anchor_vertical: TodoPanelAnchorVertical;
   panel_anchor_horizontal: TodoPanelAnchorHorizontal;
+  panel_padding_x_percent: number;
+  panel_padding_y_percent: number;
+  panel_inset_x_percent: number;
+  panel_inset_y_percent: number;
+  item_zebra_opacity_percent: number;
   background_opacity_percent: number;
   background_blur_px: number;
   columns: TodoColumnDto[];
@@ -89,6 +100,8 @@ export interface TodoListInput {
   sort_order?: number;
   font_family?: string;
   font_size?: TodoFontSizeId;
+  title_font_size?: TodoFontSizeId;
+  title_align?: TodoTitleAlign;
   color_title?: string;
   color_group?: string;
   color_item?: string;
@@ -99,6 +112,11 @@ export interface TodoListInput {
   panel_max_height_percent?: number;
   panel_anchor_vertical?: TodoPanelAnchorVertical;
   panel_anchor_horizontal?: TodoPanelAnchorHorizontal;
+  panel_padding_x_percent?: number;
+  panel_padding_y_percent?: number;
+  panel_inset_x_percent?: number;
+  panel_inset_y_percent?: number;
+  item_zebra_opacity_percent?: number;
   background_opacity_percent?: number;
   background_mode?: TodoBackgroundMode;
   background_color?: string;
@@ -169,6 +187,20 @@ export function parseOpacityPercent(raw: unknown, fallback: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** Inner panel content padding as % of panel width (matches former 2rem / 1.5rem at typical widths). */
+export function parsePanelPaddingPercent(raw: unknown, fallback: number): number {
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n) || n < 0 || n > 30) return fallback;
+  return Math.round(n * 100) / 100;
+}
+
+/** Alternating checklist row shade; 0 = off, max 50. */
+export function parseItemZebraOpacityPercent(raw: unknown, fallback: number): number {
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n) || n < 0 || n > 50) return fallback;
+  return Math.round(n * 100) / 100;
+}
+
 export function parseTodoFontSize(raw: unknown, fallback: TodoFontSizeId = 'medium'): TodoFontSizeId {
   if (typeof raw === 'string' && (TODO_FONT_SIZES as readonly string[]).includes(raw)) {
     return raw as TodoFontSizeId;
@@ -202,6 +234,13 @@ export function parsePanelAnchorHorizontal(
     (TODO_PANEL_ANCHOR_HORIZONTALS as readonly string[]).includes(raw)
   ) {
     return raw as TodoPanelAnchorHorizontal;
+  }
+  return fallback;
+}
+
+export function parseTitleAlign(raw: unknown, fallback: TodoTitleAlign = 'center'): TodoTitleAlign {
+  if (typeof raw === 'string' && (TODO_TITLE_ALIGNS as readonly string[]).includes(raw)) {
+    return raw as TodoTitleAlign;
   }
   return fallback;
 }

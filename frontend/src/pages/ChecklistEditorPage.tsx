@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import ChecklistTrashButton from '../components/ChecklistTrashButton';
 import ChecklistVisibilityToggle from '../components/ChecklistVisibilityToggle';
+import ColorField from '../components/ColorField';
 import { useTopCenterToast } from '../components/TopCenterToast';
 import TodoChecklistPanel from '../components/TodoChecklistPanel';
 import TodoThumbnailDropzone from '../components/TodoThumbnailDropzone';
@@ -11,6 +12,7 @@ import {
   serializeTodoListForm,
   writeChecklistEditorAutoSave,
 } from '../lib/checklistEditorPreferences';
+import { toHexColor } from '../lib/cssColor';
 import {
   TODO_FONT_SIZE_DEFAULT,
   TODO_FONT_SIZE_LABELS,
@@ -66,6 +68,7 @@ import {
   todoAnimationLabel,
   todoPanelAnchorAttrs,
   todoPanelStyle,
+  todoLayerStyle,
   type TodoAnimationId,
   type TodoBackgroundMode,
   type TodoColumnDto,
@@ -196,6 +199,8 @@ const DEFAULT_LIST: TodoListInput = {
   title: '',
   font_family: TODO_FONT_SYSTEM_FALLBACK,
   font_size: TODO_FONT_SIZE_DEFAULT,
+  title_font_size: TODO_FONT_SIZE_DEFAULT,
+  title_align: 'center',
   color_title: '#ffffff',
   color_group: '#e2e8f0',
   color_item: '#f8fafc',
@@ -206,6 +211,11 @@ const DEFAULT_LIST: TodoListInput = {
   panel_max_height_percent: 90,
   panel_anchor_vertical: 'top',
   panel_anchor_horizontal: 'left',
+  panel_padding_x_percent: 8,
+  panel_padding_y_percent: 6,
+  panel_inset_x_percent: 2,
+  panel_inset_y_percent: 2,
+  item_zebra_opacity_percent: 24,
   background_opacity_percent: 45,
   background_mode: 'image',
   background_color: '#000000',
@@ -350,9 +360,13 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
       sort_order: list.sort_order,
       font_family: list.theme.font_family,
       font_size: normalizeTodoFontSize(list.theme.font_size),
-      color_title: list.theme.color_title,
-      color_group: list.theme.color_group,
-      color_item: list.theme.color_item,
+      title_font_size: normalizeTodoFontSize(
+        list.theme.title_font_size ?? list.theme.font_size,
+      ),
+      title_align: list.theme.title_align ?? 'center',
+      color_title: toHexColor(list.theme.color_title, DEFAULT_LIST.color_title!),
+      color_group: toHexColor(list.theme.color_group, DEFAULT_LIST.color_group!),
+      color_item: toHexColor(list.theme.color_item, DEFAULT_LIST.color_item!),
       enter_animation: list.enter_animation,
       exit_animation: list.exit_animation,
       animation_duration_ms: list.animation_duration_ms,
@@ -360,9 +374,14 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
       panel_max_height_percent: list.panel_max_height_percent,
       panel_anchor_vertical: list.panel_anchor_vertical ?? 'top',
       panel_anchor_horizontal: list.panel_anchor_horizontal ?? 'left',
+      panel_padding_x_percent: list.panel_padding_x_percent ?? 8,
+      panel_padding_y_percent: list.panel_padding_y_percent ?? 6,
+      panel_inset_x_percent: list.panel_inset_x_percent ?? 2,
+      panel_inset_y_percent: list.panel_inset_y_percent ?? 2,
+      item_zebra_opacity_percent: list.item_zebra_opacity_percent ?? 24,
       background_opacity_percent: list.background_opacity_percent,
       background_mode: list.theme.background_mode ?? 'image',
-      background_color: list.theme.background_color ?? '#000000',
+      background_color: toHexColor(list.theme.background_color, DEFAULT_LIST.background_color!),
     };
     setForm(nextForm);
     savedFormSnapshotRef.current = serializeTodoListForm(nextForm);
@@ -386,6 +405,10 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
         background_color: form.background_color ?? '#000000',
         font_family: withTodoFontFallback(form.font_family ?? DEFAULT_LIST.font_family),
         font_size: normalizeTodoFontSize(form.font_size ?? DEFAULT_LIST.font_size),
+        title_font_size: normalizeTodoFontSize(
+          form.title_font_size ?? form.font_size ?? DEFAULT_LIST.title_font_size,
+        ),
+        title_align: form.title_align ?? 'center',
         color_title: form.color_title ?? DEFAULT_LIST.color_title!,
         color_group: form.color_group ?? DEFAULT_LIST.color_group!,
         color_item: form.color_item ?? DEFAULT_LIST.color_item!,
@@ -397,6 +420,11 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
       panel_max_height_percent: form.panel_max_height_percent ?? 90,
       panel_anchor_vertical: form.panel_anchor_vertical ?? 'top',
       panel_anchor_horizontal: form.panel_anchor_horizontal ?? 'left',
+      panel_padding_x_percent: form.panel_padding_x_percent ?? 8,
+      panel_padding_y_percent: form.panel_padding_y_percent ?? 6,
+      panel_inset_x_percent: form.panel_inset_x_percent ?? 2,
+      panel_inset_y_percent: form.panel_inset_y_percent ?? 2,
+      item_zebra_opacity_percent: form.item_zebra_opacity_percent ?? 24,
       background_opacity_percent: form.background_opacity_percent ?? 45,
       columns: filterVisibleTodoColumns(columns),
     };
@@ -1176,21 +1204,14 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
                 </fieldset>
 
                 {(form.background_mode ?? 'image') === 'color' ? (
-                  <label className="block text-sm">
+                  <div className="block text-sm">
                     <span className="mb-1 block text-text-muted">Background color</span>
-                    <input
-                      type="color"
-                      className="h-10 w-full max-w-xs rounded-md border border-surface bg-bg"
-                      value={
-                        (form.background_color ?? '#000000').startsWith('#')
-                          ? form.background_color ?? '#000000'
-                          : '#000000'
-                      }
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, background_color: e.target.value }))
-                      }
+                    <ColorField
+                      value={form.background_color ?? '#000000'}
+                      fallback="#000000"
+                      onChange={(background_color) => setForm((f) => ({ ...f, background_color }))}
                     />
-                  </label>
+                  </div>
                 ) : (
                   <div className="block text-sm md:col-span-2">
                     <span className="mb-1 block font-medium text-text">Background image</span>
@@ -1265,81 +1286,191 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
             ) : null}
 
             {themeSection === 'typography' ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block text-sm md:col-span-2">
-                  <span className="mb-1 block text-text-muted">Font family</span>
-                  <select
-                    className="w-full max-w-xl rounded-md border border-surface bg-bg px-3 py-2"
-                    style={{ fontFamily: withTodoFontFallback(form.font_family) }}
-                    value={todoFontSelectValue(form.font_family)}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, font_family: e.target.value }))
-                    }
-                  >
-                    {todoFontOptionsForSelect(form.font_family).map((group) => (
-                      <optgroup key={group.label} label={group.label}>
-                        {group.options.map((option) => (
-                          <option
-                            key={option.id}
-                            value={option.value}
-                            style={{ fontFamily: option.value }}
-                          >
-                            {option.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-text-muted">
-                    Bundled fonts ship with the app (works offline in OBS). System fonts depend on
-                    your OS. All options include a system fallback.
-                  </p>
-                </label>
-                <label className="block text-sm md:col-span-2">
-                  <span className="mb-1 block text-text-muted">
-                    Font size ({TODO_FONT_SIZE_LABELS[normalizeTodoFontSize(form.font_size)]})
-                  </span>
-                  <input
-                    type="range"
-                    className="w-full max-w-xl"
-                    min={0}
-                    max={TODO_FONT_SIZES.length - 1}
-                    step={1}
-                    value={todoFontSizeIndex(form.font_size)}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        font_size: todoFontSizeFromIndex(Number(e.target.value)),
-                      }))
-                    }
-                  />
-                  <div className="mt-1 flex w-full max-w-xl justify-between text-xs text-text-muted">
-                    {TODO_FONT_SIZES.map((size) => (
-                      <span key={size}>{TODO_FONT_SIZE_LABELS[size]}</span>
-                    ))}
+              <div className="flex max-w-3xl flex-col gap-8">
+                <section className="space-y-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                      General
+                    </p>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      Shared font for the whole panel.
+                    </p>
                   </div>
-                </label>
-                {(
-                  [
-                    ['color_title', 'Title color'],
-                    ['color_group', 'Group color'],
-                    ['color_item', 'Item color'],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key} className="block text-sm">
-                    <span className="mb-1 block text-text-muted">{label}</span>
-                    <input
-                      type="color"
-                      className="h-10 w-full max-w-xs rounded-md border border-surface bg-bg"
-                      value={
-                        (form[key] ?? DEFAULT_LIST[key]!).startsWith('#')
-                          ? (form[key] ?? DEFAULT_LIST[key]!)
-                          : '#ffffff'
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-text-muted">Font family</span>
+                    <select
+                      className="form-select w-full max-w-xl rounded-md border border-surface bg-bg pl-3 pr-9 py-2"
+                      style={{ fontFamily: withTodoFontFallback(form.font_family) }}
+                      value={todoFontSelectValue(form.font_family)}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, font_family: e.target.value }))
                       }
-                      onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                    />
+                    >
+                      {todoFontOptionsForSelect(form.font_family).map((group) => (
+                        <optgroup key={group.label} label={group.label}>
+                          {group.options.map((option) => (
+                            <option
+                              key={option.id}
+                              value={option.value}
+                              style={{ fontFamily: option.value }}
+                            >
+                              {option.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Bundled fonts ship with the app (works offline in OBS). System fonts depend on
+                      your OS. All options include a system fallback.
+                    </p>
                   </label>
-                ))}
+                </section>
+
+                <section className="space-y-4 border-t border-surface pt-8">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                      Panel title
+                    </p>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      The heading at the top of the overlay panel.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block text-sm md:col-span-2">
+                      <span className="mb-1 block text-text-muted">
+                        Size (
+                        {TODO_FONT_SIZE_LABELS[
+                          normalizeTodoFontSize(form.title_font_size ?? form.font_size)
+                        ]}
+                        )
+                      </span>
+                      <input
+                        type="range"
+                        className="w-full max-w-xl"
+                        min={0}
+                        max={TODO_FONT_SIZES.length - 1}
+                        step={1}
+                        value={todoFontSizeIndex(form.title_font_size ?? form.font_size)}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            title_font_size: todoFontSizeFromIndex(Number(e.target.value)),
+                          }))
+                        }
+                      />
+                      <div className="mt-1 flex w-full max-w-xl justify-between text-xs text-text-muted">
+                        {TODO_FONT_SIZES.map((size) => (
+                          <span key={size}>{TODO_FONT_SIZE_LABELS[size]}</span>
+                        ))}
+                      </div>
+                    </label>
+                    <label className="block text-sm">
+                      <span className="mb-1 block text-text-muted">Alignment</span>
+                      <select
+                        className="form-select w-full max-w-xs rounded-md border border-surface bg-bg pl-3 pr-9 py-2"
+                        value={form.title_align ?? 'center'}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            title_align: e.target.value as 'left' | 'center' | 'right',
+                          }))
+                        }
+                      >
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                      </select>
+                    </label>
+                    <div className="block text-sm md:col-span-2">
+                      <span className="mb-1 block text-text-muted">Color</span>
+                      <ColorField
+                        value={form.color_title ?? DEFAULT_LIST.color_title!}
+                        fallback={DEFAULT_LIST.color_title!}
+                        onChange={(color_title) => setForm((f) => ({ ...f, color_title }))}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section className="space-y-4 border-t border-surface pt-8">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+                      Groups &amp; items
+                    </p>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      Group headings, checklist rows, and thumbnails.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block text-sm md:col-span-2">
+                      <span className="mb-1 block text-text-muted">
+                        Size ({TODO_FONT_SIZE_LABELS[normalizeTodoFontSize(form.font_size)]})
+                      </span>
+                      <input
+                        type="range"
+                        className="w-full max-w-xl"
+                        min={0}
+                        max={TODO_FONT_SIZES.length - 1}
+                        step={1}
+                        value={todoFontSizeIndex(form.font_size)}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            font_size: todoFontSizeFromIndex(Number(e.target.value)),
+                          }))
+                        }
+                      />
+                      <div className="mt-1 flex w-full max-w-xl justify-between text-xs text-text-muted">
+                        {TODO_FONT_SIZES.map((size) => (
+                          <span key={size}>{TODO_FONT_SIZE_LABELS[size]}</span>
+                        ))}
+                      </div>
+                    </label>
+                    <div className="block text-sm md:col-span-2">
+                      <span className="mb-1 block text-text-muted">Group color</span>
+                      <ColorField
+                        value={form.color_group ?? DEFAULT_LIST.color_group!}
+                        fallback={DEFAULT_LIST.color_group!}
+                        onChange={(color_group) => setForm((f) => ({ ...f, color_group }))}
+                      />
+                    </div>
+                    <div className="block text-sm md:col-span-2">
+                      <span className="mb-1 block text-text-muted">Item color</span>
+                      <ColorField
+                        value={form.color_item ?? DEFAULT_LIST.color_item!}
+                        fallback={DEFAULT_LIST.color_item!}
+                        onChange={(color_item) => setForm((f) => ({ ...f, color_item }))}
+                      />
+                    </div>
+                    <label className="block text-sm md:col-span-2">
+                      <span className="mb-1 block text-text-muted">
+                        Alternating row shade (
+                        {(form.item_zebra_opacity_percent ?? 24) === 0
+                          ? 'off'
+                          : `${form.item_zebra_opacity_percent ?? 24}%`}
+                        )
+                      </span>
+                      <input
+                        type="range"
+                        className="w-full max-w-xl"
+                        min={0}
+                        max={50}
+                        step={1}
+                        value={form.item_zebra_opacity_percent ?? 24}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            item_zebra_opacity_percent: Number(e.target.value),
+                          }))
+                        }
+                      />
+                      <p className="mt-1 text-xs text-text-muted">
+                        Darkens every other item row. Set to 0% to disable.
+                      </p>
+                    </label>
+                  </div>
+                </section>
               </div>
             ) : null}
 
@@ -1393,6 +1524,84 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
                         className="w-full"
                       />
                     </label>
+                    <p className="text-xs text-text-muted">Screen edge inset</p>
+                    <label className="block text-sm">
+                      <span className="mb-1 block text-text-muted">
+                        Horizontal inset ({form.panel_inset_x_percent ?? 2}%)
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={30}
+                        step={0.5}
+                        value={form.panel_inset_x_percent ?? 2}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            panel_inset_x_percent: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full"
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="mb-1 block text-text-muted">
+                        Vertical inset ({form.panel_inset_y_percent ?? 2}%)
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={30}
+                        step={0.5}
+                        value={form.panel_inset_y_percent ?? 2}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            panel_inset_y_percent: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full"
+                      />
+                    </label>
+                    <p className="text-xs text-text-muted">Inner content padding</p>
+                    <label className="block text-sm">
+                      <span className="mb-1 block text-text-muted">
+                        Horizontal padding ({form.panel_padding_x_percent ?? 8}%)
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={30}
+                        step={0.5}
+                        value={form.panel_padding_x_percent ?? 8}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            panel_padding_x_percent: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full"
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="mb-1 block text-text-muted">
+                        Vertical padding ({form.panel_padding_y_percent ?? 6}%)
+                      </span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={30}
+                        step={0.5}
+                        value={form.panel_padding_y_percent ?? 6}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            panel_padding_y_percent: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full"
+                      />
+                    </label>
                   </div>
                 </div>
                 <div className="min-w-0">
@@ -1403,7 +1612,7 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
                     <label className="block text-sm">
                       <span className="mb-1 block text-text-muted">Enter animation</span>
                       <select
-                        className="w-full rounded-md border border-surface bg-bg px-3 py-2"
+                        className="form-select w-full rounded-md border border-surface bg-bg pl-3 pr-9 py-2"
                         value={form.enter_animation ?? 'fade'}
                         onChange={(e) =>
                           setForm((f) => ({
@@ -1422,7 +1631,7 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
                     <label className="block text-sm">
                       <span className="mb-1 block text-text-muted">Exit animation</span>
                       <select
-                        className="w-full rounded-md border border-surface bg-bg px-3 py-2"
+                        className="form-select w-full rounded-md border border-surface bg-bg pl-3 pr-9 py-2"
                         value={form.exit_animation ?? 'fade'}
                         onChange={(e) =>
                           setForm((f) => ({
@@ -1958,7 +2167,11 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
               aria-hidden="true"
             />
             {previewPhase !== 'hidden' ? (
-              <div className="todo-layer" {...todoPanelAnchorAttrs(previewList)}>
+              <div
+                className="todo-layer"
+                style={todoLayerStyle(previewList)}
+                {...todoPanelAnchorAttrs(previewList)}
+              >
                 <TodoChecklistPanel
                   list={previewList}
                   preview

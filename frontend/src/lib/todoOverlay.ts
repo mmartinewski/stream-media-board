@@ -64,6 +64,7 @@ export { TODO_FONT_SIZES, TODO_FONT_SIZE_DEFAULT } from './todoFontSize';
 
 export type TodoPanelAnchorVertical = AnchorVertical;
 export type TodoPanelAnchorHorizontal = AnchorHorizontal;
+export type TodoTitleAlign = AnchorHorizontal;
 
 export interface TodoListThemeDto {
   background_url: string | null;
@@ -71,6 +72,8 @@ export interface TodoListThemeDto {
   background_color: string;
   font_family: string;
   font_size: import('./todoFontSize').TodoFontSizeId;
+  title_font_size: import('./todoFontSize').TodoFontSizeId;
+  title_align: TodoTitleAlign;
   color_title: string;
   color_group: string;
   color_item: string;
@@ -89,6 +92,11 @@ export interface TodoListDetailDto {
   panel_max_height_percent: number;
   panel_anchor_vertical: TodoPanelAnchorVertical;
   panel_anchor_horizontal: TodoPanelAnchorHorizontal;
+  panel_padding_x_percent: number;
+  panel_padding_y_percent: number;
+  panel_inset_x_percent: number;
+  panel_inset_y_percent: number;
+  item_zebra_opacity_percent: number;
   background_opacity_percent: number;
   columns: TodoColumnDto[];
 }
@@ -106,6 +114,8 @@ export interface TodoListInput {
   sort_order?: number;
   font_family?: string;
   font_size?: import('./todoFontSize').TodoFontSizeId;
+  title_font_size?: import('./todoFontSize').TodoFontSizeId;
+  title_align?: TodoTitleAlign;
   color_title?: string;
   color_group?: string;
   color_item?: string;
@@ -116,6 +126,11 @@ export interface TodoListInput {
   panel_max_height_percent?: number;
   panel_anchor_vertical?: TodoPanelAnchorVertical;
   panel_anchor_horizontal?: TodoPanelAnchorHorizontal;
+  panel_padding_x_percent?: number;
+  panel_padding_y_percent?: number;
+  panel_inset_x_percent?: number;
+  panel_inset_y_percent?: number;
+  item_zebra_opacity_percent?: number;
   background_opacity_percent?: number;
   background_mode?: TodoBackgroundMode;
   background_color?: string;
@@ -154,18 +169,38 @@ export function todoPanelStyle(
     mode === 'image' ? resolveTodoMediaUrl(list.theme.background_url) : null;
   const opacity = (list.background_opacity_percent ?? 45) / 100;
   const fontSize = normalizeTodoFontSize(list.theme.font_size);
+  const titleFontSize = normalizeTodoFontSize(list.theme.title_font_size ?? list.theme.font_size);
   return {
-    ...todoFontSizeCssVars(fontSize, options?.preview ? 'preview' : 'overlay'),
+    ...todoFontSizeCssVars(
+      fontSize,
+      options?.preview ? 'preview' : 'overlay',
+      titleFontSize,
+    ),
     ['--todo-bg-image' as string]: bg ? `url("${bg}")` : 'none',
     ['--todo-bg-opacity' as string]: String(opacity),
     ['--todo-bg-solid' as string]: list.theme.background_color ?? '#000000',
     ['--todo-font-family' as string]: withTodoFontFallback(list.theme.font_family),
     ['--todo-color-title' as string]: list.theme.color_title,
+    ['--todo-title-align' as string]: list.theme.title_align ?? 'center',
     ['--todo-color-group' as string]: list.theme.color_group,
     ['--todo-color-item' as string]: list.theme.color_item,
     ['--todo-panel-width' as string]: `${list.panel_width_percent}%`,
     ['--todo-panel-max-height' as string]: `${list.panel_max_height_percent}%`,
+    ['--todo-panel-padding-x' as string]: String(list.panel_padding_x_percent ?? 8),
+    ['--todo-panel-padding-y' as string]: String(list.panel_padding_y_percent ?? 6),
+    ['--todo-item-zebra-opacity' as string]: String(
+      (list.item_zebra_opacity_percent ?? 24) / 100,
+    ),
     ['--todo-animation-duration' as string]: `${list.animation_duration_ms}ms`,
+  };
+}
+
+export function todoLayerStyle(
+  list: Pick<TodoListOverlayDto, 'panel_inset_x_percent' | 'panel_inset_y_percent'>,
+): CSSProperties {
+  return {
+    ['--todo-layer-inset-x' as string]: String(list.panel_inset_x_percent ?? 2),
+    ['--todo-layer-inset-y' as string]: String(list.panel_inset_y_percent ?? 2),
   };
 }
 

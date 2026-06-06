@@ -5,6 +5,7 @@ import {
   filterVisibleTodoColumns,
   todoPanelAnchorAttrs,
   todoPanelStyle,
+  todoLayerStyle,
   type TodoListOverlayDto,
 } from '../lib/todoOverlay';
 
@@ -125,7 +126,7 @@ export default function TodoOverlayLayer({
 
   return (
     <div className="todo-overlay" aria-hidden={phase !== 'visible'}>
-      <div className="todo-layer" {...todoPanelAnchorAttrs(list)}>
+      <div className="todo-layer" style={todoLayerStyle(list)} {...todoPanelAnchorAttrs(list)}>
         <TodoChecklistPanel
           key={list.id}
           list={list}

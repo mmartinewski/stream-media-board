@@ -247,7 +247,7 @@ export default function LayoutAreasPage() {
               <label className="block text-sm">
                 <span className="font-medium">Landscape clips</span>
                 <select
-                  className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2 text-sm"
+                  className="form-select mt-1 w-full rounded-md border border-surface bg-bg pl-2 pr-9 py-2 text-sm"
                   value={settings.layout_area_id_landscape ?? ''}
                   onChange={(e) =>
                     setSettings({
@@ -269,7 +269,7 @@ export default function LayoutAreasPage() {
               <label className="block text-sm">
                 <span className="font-medium">Portrait clips</span>
                 <select
-                  className="mt-1 w-full rounded-md border border-surface bg-bg px-2 py-2 text-sm"
+                  className="form-select mt-1 w-full rounded-md border border-surface bg-bg pl-2 pr-9 py-2 text-sm"
                   value={settings.layout_area_id_portrait ?? ''}
                   onChange={(e) =>
                     setSettings({

@@ -1328,7 +1328,7 @@ export default function DashboardPage() {
                       )
                     }
                     disabled={metadataSaving}
-                    className="mt-1 w-full rounded-md border border-surface bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
+                    className="form-select mt-1 w-full rounded-md border border-surface bg-bg-soft pl-3 pr-9 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
                   >
                     <option value="">By orientation (global default)</option>
                     {layoutAreas.map((area) => (

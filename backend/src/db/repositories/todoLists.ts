@@ -31,6 +31,8 @@ interface TodoListRow {
   background_image_path: string | null;
   font_family: string;
   font_size: string;
+  title_font_size: string;
+  title_align: string;
   color_title: string;
   color_group: string;
   color_item: string;
@@ -45,6 +47,11 @@ interface TodoListRow {
   background_color: string;
   panel_anchor_vertical: string;
   panel_anchor_horizontal: string;
+  panel_padding_x_percent: number;
+  panel_padding_y_percent: number;
+  panel_inset_x_percent: number;
+  panel_inset_y_percent: number;
+  item_zebra_opacity_percent: number;
 }
 
 interface TodoGroupRow {
@@ -121,8 +128,13 @@ export function ensureTodoListsSchema(db: BetterDatabase): void {
   ensureBackgroundBlurColumn(db);
   ensureBackgroundModeColumns(db);
   ensurePanelAnchorColumns(db);
+  ensurePanelPaddingColumns(db);
+  ensurePanelInsetColumns(db);
+  ensureItemZebraColumn(db);
   ensureColumnGroupVisibleColumns(db);
   ensureFontSizeColumn(db);
+  ensureTitleFontSizeColumn(db);
+  ensureTitleAlignColumn(db);
   ensureListNameColumn(db);
   migrateTodoColumns(db);
 }
@@ -168,6 +180,25 @@ function migrateFontSizeColumnForTiny(db: BetterDatabase): void {
     db.exec('ROLLBACK');
     throw err;
   }
+}
+
+function ensureTitleFontSizeColumn(db: BetterDatabase): void {
+  const rows = db.prepare(`PRAGMA table_info(todo_lists)`).all() as Array<{ name: string }>;
+  if (rows.some((row) => row.name === 'title_font_size')) return;
+  db.exec(
+    `ALTER TABLE todo_lists ADD COLUMN title_font_size TEXT NOT NULL DEFAULT 'medium'
+      CHECK (title_font_size IN ('tiny', 'small', 'medium', 'large'))`,
+  );
+  db.prepare(`UPDATE todo_lists SET title_font_size = font_size`).run();
+}
+
+function ensureTitleAlignColumn(db: BetterDatabase): void {
+  const rows = db.prepare(`PRAGMA table_info(todo_lists)`).all() as Array<{ name: string }>;
+  if (rows.some((row) => row.name === 'title_align')) return;
+  db.exec(
+    `ALTER TABLE todo_lists ADD COLUMN title_align TEXT NOT NULL DEFAULT 'center'
+      CHECK (title_align IN ('left', 'center', 'right'))`,
+  );
 }
 
 function ensureBackgroundOpacityColumn(db: BetterDatabase): void {
@@ -217,6 +248,47 @@ function ensurePanelAnchorColumns(db: BetterDatabase): void {
         CHECK (panel_anchor_horizontal IN ('left', 'center', 'right'))`,
     );
   }
+}
+
+function ensurePanelPaddingColumns(db: BetterDatabase): void {
+  const rows = db.prepare(`PRAGMA table_info(todo_lists)`).all() as Array<{ name: string }>;
+  if (!rows.some((row) => row.name === 'panel_padding_x_percent')) {
+    db.exec(
+      `ALTER TABLE todo_lists ADD COLUMN panel_padding_x_percent REAL NOT NULL DEFAULT 8
+        CHECK (panel_padding_x_percent >= 0 AND panel_padding_x_percent <= 30)`,
+    );
+  }
+  if (!rows.some((row) => row.name === 'panel_padding_y_percent')) {
+    db.exec(
+      `ALTER TABLE todo_lists ADD COLUMN panel_padding_y_percent REAL NOT NULL DEFAULT 6
+        CHECK (panel_padding_y_percent >= 0 AND panel_padding_y_percent <= 30)`,
+    );
+  }
+}
+
+function ensurePanelInsetColumns(db: BetterDatabase): void {
+  const rows = db.prepare(`PRAGMA table_info(todo_lists)`).all() as Array<{ name: string }>;
+  if (!rows.some((row) => row.name === 'panel_inset_x_percent')) {
+    db.exec(
+      `ALTER TABLE todo_lists ADD COLUMN panel_inset_x_percent REAL NOT NULL DEFAULT 2
+        CHECK (panel_inset_x_percent >= 0 AND panel_inset_x_percent <= 30)`,
+    );
+  }
+  if (!rows.some((row) => row.name === 'panel_inset_y_percent')) {
+    db.exec(
+      `ALTER TABLE todo_lists ADD COLUMN panel_inset_y_percent REAL NOT NULL DEFAULT 2
+        CHECK (panel_inset_y_percent >= 0 AND panel_inset_y_percent <= 30)`,
+    );
+  }
+}
+
+function ensureItemZebraColumn(db: BetterDatabase): void {
+  const rows = db.prepare(`PRAGMA table_info(todo_lists)`).all() as Array<{ name: string }>;
+  if (rows.some((row) => row.name === 'item_zebra_opacity_percent')) return;
+  db.exec(
+    `ALTER TABLE todo_lists ADD COLUMN item_zebra_opacity_percent REAL NOT NULL DEFAULT 24
+      CHECK (item_zebra_opacity_percent >= 0 AND item_zebra_opacity_percent <= 50)`,
+  );
 }
 
 function ensureColumnGroupVisibleColumns(db: BetterDatabase): void {
@@ -348,6 +420,10 @@ export function buildTodoListDetailDto(
       background_color: row.background_color ?? '#000000',
       font_family: row.font_family,
       font_size: (row.font_size ?? 'medium') as TodoListDetailDto['theme']['font_size'],
+      title_font_size: (row.title_font_size ??
+        row.font_size ??
+        'medium') as TodoListDetailDto['theme']['title_font_size'],
+      title_align: (row.title_align ?? 'center') as TodoListDetailDto['theme']['title_align'],
       color_title: row.color_title,
       color_group: row.color_group,
       color_item: row.color_item,
@@ -361,6 +437,11 @@ export function buildTodoListDetailDto(
       'top') as TodoListDetailDto['panel_anchor_vertical'],
     panel_anchor_horizontal: (row.panel_anchor_horizontal ??
       'left') as TodoListDetailDto['panel_anchor_horizontal'],
+    panel_padding_x_percent: row.panel_padding_x_percent ?? 8,
+    panel_padding_y_percent: row.panel_padding_y_percent ?? 6,
+    panel_inset_x_percent: row.panel_inset_x_percent ?? 2,
+    panel_inset_y_percent: row.panel_inset_y_percent ?? 2,
+    item_zebra_opacity_percent: row.item_zebra_opacity_percent ?? 24,
     background_opacity_percent: row.background_opacity_percent,
     background_blur_px: row.background_blur_px ?? 0,
     columns: columns.map((column) => mapColumn(db, column)),
@@ -393,11 +474,14 @@ export function createTodoList(db: BetterDatabase, input: TodoListInput): TodoLi
   const result = db
     .prepare(
       `INSERT INTO todo_lists (
-        name, title, sort_order, font_family, font_size, color_title, color_group, color_item,
+        name, title, sort_order, font_family, font_size, title_font_size, title_align, color_title, color_group, color_item,
         enter_animation, exit_animation, animation_duration_ms,
         panel_width_percent, panel_max_height_percent, background_opacity_percent, background_blur_px,
-        background_mode, background_color, panel_anchor_vertical, panel_anchor_horizontal
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        background_mode, background_color, panel_anchor_vertical, panel_anchor_horizontal,
+        panel_padding_x_percent, panel_padding_y_percent,
+        panel_inset_x_percent, panel_inset_y_percent,
+        item_zebra_opacity_percent
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       name,
@@ -405,6 +489,8 @@ export function createTodoList(db: BetterDatabase, input: TodoListInput): TodoLi
       sortOrder,
       input.font_family ?? 'system-ui, sans-serif',
       input.font_size ?? 'medium',
+      input.title_font_size ?? input.font_size ?? 'medium',
+      input.title_align ?? 'center',
       input.color_title ?? '#ffffff',
       input.color_group ?? '#e2e8f0',
       input.color_item ?? '#f8fafc',
@@ -419,6 +505,11 @@ export function createTodoList(db: BetterDatabase, input: TodoListInput): TodoLi
       input.background_color ?? '#000000',
       input.panel_anchor_vertical ?? 'top',
       input.panel_anchor_horizontal ?? 'left',
+      input.panel_padding_x_percent ?? 8,
+      input.panel_padding_y_percent ?? 6,
+      input.panel_inset_x_percent ?? 2,
+      input.panel_inset_y_percent ?? 2,
+      input.item_zebra_opacity_percent ?? 24,
     );
   const listId = Number(result.lastInsertRowid);
   db.prepare(`INSERT INTO todo_columns (list_id, sort_order) VALUES (?, 10)`).run(listId);
@@ -461,6 +552,8 @@ export function updateTodoList(
       sort_order = ?,
       font_family = ?,
       font_size = ?,
+      title_font_size = ?,
+      title_align = ?,
       color_title = ?,
       color_group = ?,
       color_item = ?,
@@ -475,6 +568,11 @@ export function updateTodoList(
       background_color = ?,
       panel_anchor_vertical = ?,
       panel_anchor_horizontal = ?,
+      panel_padding_x_percent = ?,
+      panel_padding_y_percent = ?,
+      panel_inset_x_percent = ?,
+      panel_inset_y_percent = ?,
+      item_zebra_opacity_percent = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?`,
   ).run(
@@ -483,6 +581,12 @@ export function updateTodoList(
     input.sort_order ?? existing.sort_order,
     input.font_family ?? existing.font_family,
     input.font_size ?? existing.font_size ?? 'medium',
+    input.title_font_size ??
+      existing.title_font_size ??
+      input.font_size ??
+      existing.font_size ??
+      'medium',
+    input.title_align ?? existing.title_align ?? 'center',
     input.color_title ?? existing.color_title,
     input.color_group ?? existing.color_group,
     input.color_item ?? existing.color_item,
@@ -497,6 +601,11 @@ export function updateTodoList(
     input.background_color ?? existing.background_color ?? '#000000',
     input.panel_anchor_vertical ?? existing.panel_anchor_vertical ?? 'top',
     input.panel_anchor_horizontal ?? existing.panel_anchor_horizontal ?? 'left',
+    input.panel_padding_x_percent ?? existing.panel_padding_x_percent ?? 8,
+    input.panel_padding_y_percent ?? existing.panel_padding_y_percent ?? 6,
+    input.panel_inset_x_percent ?? existing.panel_inset_x_percent ?? 2,
+    input.panel_inset_y_percent ?? existing.panel_inset_y_percent ?? 2,
+    input.item_zebra_opacity_percent ?? existing.item_zebra_opacity_percent ?? 24,
     id,
   );
   const updated = getTodoListById(db, id);

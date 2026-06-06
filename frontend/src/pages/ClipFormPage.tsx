@@ -1882,7 +1882,7 @@ export default function ClipFormPage({ mode }: Props) {
                 id="video-orientation"
                 value={videoOrientation}
                 onChange={(e) => setVideoOrientation(e.target.value as VideoOrientation)}
-                className="mt-1 rounded-md border border-surface bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+                className="form-select mt-1 rounded-md border border-surface bg-bg pl-3 pr-9 py-2 text-sm outline-none focus:border-accent"
               >
                 {(['landscape', 'portrait'] as const).map((value) => (
                   <option key={value} value={value}>
@@ -1912,7 +1912,7 @@ export default function ClipFormPage({ mode }: Props) {
                 onChange={(e) =>
                   setDefaultLayoutAreaId(e.target.value === '' ? '' : Number(e.target.value))
                 }
-                className="mt-1 rounded-md border border-surface bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+                className="form-select mt-1 rounded-md border border-surface bg-bg pl-3 pr-9 py-2 text-sm outline-none focus:border-accent"
               >
                 <option value="">By orientation (global default)</option>
                 {layoutAreas.map((area) => (
