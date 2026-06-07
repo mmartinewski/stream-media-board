@@ -59,15 +59,25 @@ function resolveGhExecutable() {
 
 let ghExe = 'gh';
 
+function needsShell(command) {
+  return process.platform === 'win32' && /\.(cmd|bat)$/i.test(command);
+}
+
 function run(command, commandArgs, options = {}) {
   const exe = command === 'gh' ? ghExe : command;
   const result = spawnSync(exe, commandArgs, {
     cwd: root,
     stdio: 'inherit',
-    // Never use shell for gh/git — paths with spaces (installer .exe name) break on Windows.
-    shell: false,
+    // npm.cmd/.bat shims need a shell on Node >=18.20; gh/git must stay shell:false
+    // (paths with spaces in installer names break under cmd wrapping).
+    shell: needsShell(exe),
     ...options,
   });
+  if (result.error) {
+    console.error(`[publish] command failed: ${exe} ${commandArgs.join(' ')}`);
+    console.error(result.error.message);
+    process.exit(1);
+  }
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
@@ -167,9 +177,11 @@ function main() {
   const tag = `v${version}`;
 
   if (!skipBuild) {
-    console.log('[publish] Building Windows installer...');
+    // Prefer signed build when SIGN_CERT_NAME is set (self-signed or CA cert in store).
+    const buildScript = process.env.SIGN_CERT_NAME ? 'dist:signed' : 'installer:win';
+    console.log(`[publish] Building Windows installer (npm run ${buildScript})...`);
     const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    run(npm, ['run', 'installer:win']);
+    run(npm, ['run', buildScript]);
   }
 
   const installerPath = findInstallerExe(version);

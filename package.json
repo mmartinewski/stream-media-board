@@ -24,6 +24,7 @@
     "start": "npm --workspace backend run start",
     "installer:win": "powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
     "publish:release": "node scripts/publish-release.mjs --skip-build",
+    "publish:signed": "powershell -ExecutionPolicy Bypass -Command \"$env:SIGN_CERT_NAME='Stream Media Board'; node scripts/publish-release.mjs\"",
     "publish:win": "node scripts/publish-release.mjs"
   },
   "repository": {
