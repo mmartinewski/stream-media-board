@@ -8,25 +8,30 @@
 
 ## 0. Contexto (leia antes de tudo)
 
-**Projeto:** Stream Media Board — app Electron (Windows) que sobe um backend Express local e abre
-o dashboard no navegador do usuário. Reprodução de clips acontece no _browser source_ (OBS etc.).
+**Projeto:** Stream Media Board — app Windows com casca nativa Go (bandeja) que sobe um backend
+Express local (sob `node.exe` embutido) e abre o dashboard no navegador do usuário. Reprodução de
+clips acontece no _browser source_ (OBS etc.).
 
 **Objetivo deste guia:** reduzir o **espaço em disco** do app empacotado e o **consumo de recursos**
 em runtime, com o menor risco possível, antes de implementar o auto-updater.
 
-### Arquitetura atual (resumo)
+### Arquitetura atual (resumo — pós Passo 5)
 
-- `desktop/main.cjs` — processo principal do Electron. Cria o ícone de bandeja (tray), **dá `spawn`
-  num `node.exe` separado** para rodar o backend, e abre o dashboard via `shell.openExternal`.
-  Não há janela principal; a UI roda no navegador do usuário. A única `BrowserWindow` é a de login
-  do YouTube (`desktop/youtube-auth.cjs`).
+- `shell/` — casca nativa **Go** (`StreamMediaBoard.exe`): bandeja (`systray`), spawn do backend,
+  health poll, login YouTube via **WebView2** + export de cookies (Netscape), protocolo
+  `soundboard://`, single-instance (mutex + canal loopback).
 - `backend/` — Express + `better-sqlite3` + `sharp`. Compilado para `backend/dist/`.
 - `frontend/` — React/Vite. Compilado para `frontend/dist/`.
-- `bin/` — executáveis: `ffmpeg.exe`, `ffprobe.exe`, `ffplay.exe`, `yt-dlp.exe`. Baixados por
-  `scripts/fetch-binaries.mjs` (`npm run fetch:bin`). **Não versionados** (estão no `.gitignore`).
-- `desktop-runtime/node.exe` — cópia do Node feita por `scripts/prepare-desktop-runtime.mjs`,
-  empacotada como `extraResources` em `node/node.exe`.
-- Empacotamento: `electron-builder` (config no `package.json`, chave `build`). `asar: false`.
+- `bin/` — executáveis: `ffmpeg.exe`, `ffprobe.exe`, `yt-dlp.exe` + DLLs compartilhadas. Baixados
+  por `scripts/fetch-binaries.mjs` (`npm run fetch:bin`). **Não versionados** (`.gitignore`).
+- `runtime/node.exe` — Node 22 win-x64 embutido (`scripts/fetch-node-runtime.mjs`). ABI 127 = dev;
+  **sem orquestração de ABI** (Electron removido).
+- Empacotamento: **Inno Setup** (`installer/soundboard.iss`, `npm run installer:inno`). Layout em
+  `dist-shell/` montado por `scripts/stage-windows-dist.mjs`. Assinatura opt-in via `SIGN_CERT_*`
+  (`scripts/sign.mjs`, `npm run dist:signed`).
+
+> **Histórico (Passos 1–4):** Electron + `electron-builder` + `asar` + ABI juggling — removidos na
+> branch `step5-lightweight-tray` após validação funcional.
 
 ### Pegada atual medida (app instalado ≈ 1,1 GB)
 
@@ -430,77 +435,72 @@ dados) e confirmar:
 
 ---
 
-## Passo 5 — (Opcional, alto risco) Substituir o Electron por uma bandeja leve
+## Passo 5 — Substituir o Electron por uma bandeja nativa leve
 
-> **Maior ganho de RAM e ~366 MB de disco**, porém é a mudança mais invasiva. Avaliar bem antes.
-> Tratar como projeto à parte, não como um passo rápido.
+> **STATUS: aplicado e validado** na branch `step5-lightweight-tray`. Electron, `electron-builder`,
+> scripts de ABI/asar e `desktop/*.cjs` **removidos**.
 
-### Objetivo
-Como a UI roda no navegador do usuário (não numa janela Electron), substituir o shell Electron por
-uma bandeja nativa enxuta (ex.: um pequeno exe em Rust/Go/C#, ou uma lib de tray em Node) que apenas
-sobe o backend e abre o navegador.
+### O que foi feito
+- **Casca Go** (`shell/`): `fyne.io/systray` + `wailsapp/go-webview2` (login YouTube com
+  `ICoreWebView2CookieManager` → `youtube.cookies.txt` Netscape).
+- **Backend** sob `runtime/node.exe` v22 (ABI 127); `PERSONAL_CLIP_PLAYER_ROOT` aponta para
+  `<install>/app`.
+- **Instalador Inno Setup** per-user; protocolo `soundboard://` no registro (HKCU) + no `.iss`.
+- **Assinatura opt-in** (`scripts/sign.mjs`, cert autoassinado em `scripts/make-selfsigned-cert.ps1`).
+- Scripts de build: `npm run installer:inno`, `npm run dist:signed`, `npm run installer:win`.
 
-### Bloqueador principal
-O **login do YouTube** (`desktop/youtube-auth.cjs`) usa `BrowserWindow` + `session` do Electron para
-capturar cookies. Sem Electron, é preciso reimplementar isso, por exemplo:
-- `yt-dlp --cookies-from-browser <navegador>`, ou
-- abrir o navegador do sistema e importar/exportar cookies manualmente.
+### Pegada medida (pós Passo 5)
+| Componente | Tamanho aprox. |
+|---|---|
+| Casca Go (`StreamMediaBoard.exe`) | ~7 MB |
+| `runtime/node.exe` | ~80 MB |
+| `bin/` (FFmpeg shared + yt-dlp) | ~273 MB |
+| `app/` (backend + frontend + node_modules produção) | ~120 MB |
+| **Instalador comprimido** | **~137 MB** |
 
-Também se perde: `dialog` (caixas de mensagem) e o registro do protocolo `soundboard://` (precisa de
-outra abordagem no Windows).
-
-### Esboço de etapas (não detalhado — exige design próprio)
-1. Escolher a tecnologia da bandeja e prototipar (subir backend + abrir browser + sair).
-2. Reimplementar a captura de cookies do YouTube fora do Electron.
-3. Reimplementar registro do protocolo `soundboard://` (chaves de registro do Windows).
-4. Ajustar o instalador (NSIS) para o novo executável principal.
-5. Remover `electron`/`electron-builder` ou migrar o empacotamento.
+Economia vs Electron (~648 MB instalado): **~170 MB de disco** + ganho grande de RAM em idle.
 
 ### Critério de aceite
-- Bandeja sobe o backend, abre o dashboard, faz login no YouTube e encerra limpo.
-- Uso de RAM em idle cai significativamente; ~366 MB de Electron somem do disco.
-
-### Trade-offs
-- Alto esforço e risco. Perde APIs prontas do Electron. Só compensa se RAM/idle for prioridade.
+- [x] Bandeja sobe o backend, abre o dashboard, login YouTube, encerra limpo.
+- [x] Clipes, thumbnails (sharp), prefetch YouTube (yt-dlp) validados em ambiente de teste.
+- [x] `npm run dist:signed` / `installer:inno` gera instalador funcional.
 
 ### Rollback
-- Manter a branch isolada; só mesclar se tudo passar.
+- Tag/branch `main` com release v0.17.0 (Electron) permanece como referência até merge.
 
 ---
 
 ## Verificação final (após os passos aplicados)
 
 ```powershell
-# Tamanho do app empacotado
-cmd /c 'dir /s /-c /a release\win-unpacked' | Select-String 'File\(s\)' | Select-Object -Last 1
+# Tamanho do layout empacotado (pré-Inno)
+cmd /c 'dir /s /-c /a dist-shell' | Select-String 'File\(s\)' | Select-Object -Last 1
 
 # Tamanho do instalador gerado
-Get-ChildItem release\*Setup*.exe | Sort-Object LastWriteTime | Select-Object -Last 1 |
+Get-ChildItem installer\Output\StreamMediaBoard-Setup-*.exe |
+  Sort-Object LastWriteTime | Select-Object -Last 1 |
   Select-Object Name, @{N='MB';E={[math]::Round($_.Length/1MB,1)}}
+
+# Self-test do layout empacotado (sem UI)
+$env:SHELL_SELFTEST = '1'
+.\dist-shell\StreamMediaBoard.exe
 ```
 
 ### Metas (referência; ordem de execução 1 → 3 → 4 → 2 → 5)
 | Cenário | Instalado | Instalador |
 |---|---|---|
-| Original | ~1.148 MB | ~318 MB |
-| Após Passo 1 (medido: `bin/` −358 MB) | ~790 MB | — |
-| Após Passos 1+3 | ~775 MB | — |
-| **Após Passos 1+3+4 (medido)** | **~648 MB** | **~201 MB** |
-| Após Passos 1+3+4+2 (asar) | ~648 MB | ~201 MB |
-| Após tudo (+Passo 5) | ~290 MB | baixo |
-
-> Medições com Electron 41.7.1. O Passo 2 (asar) reduz contagem de arquivos/startup, com pouco
-> impacto no tamanho total.
+| Original (Electron) | ~1.148 MB | ~318 MB |
+| Após Passos 1+3+4+2 (Electron) | ~648 MB | ~201 MB |
+| **Após Passo 5 (Go + Inno, medido)** | **~480 MB** | **~137 MB** |
 
 ## Checklist de aceite geral
-- [ ] App empacota (`npm run dist:win`) sem erros.
-- [ ] App instala e o backend sobe (tray "Open in Browser" abre o dashboard).
-- [ ] Reproduz um clip de áudio e um de vídeo no browser source.
-- [ ] Gera thumbnail (sharp) e processa um link do YouTube (yt-dlp).
-- [ ] Login do YouTube funciona (enquanto Electron existir).
-- [ ] `npm --workspace backend run typecheck` passa.
-- [ ] Tamanho instalado bateu a meta do(s) passo(s) aplicado(s).
+- [x] App empacota (`npm run installer:inno` ou `dist:signed`) sem erros.
+- [x] App instala e o backend sobe (tray "Open in Browser" abre o dashboard).
+- [x] Reproduz clipes; thumbnails (sharp) e YouTube (yt-dlp) validados.
+- [x] Login do YouTube via WebView2 funciona.
+- [ ] `npm --workspace backend run typecheck` passa (rodar antes de merge).
+- [x] Tamanho instalado ~480 MB (meta ~290 MB era estimativa otimista; `bin/` FFmpeg domina).
 
 ## Higiene local (não relacionado ao pacote)
-A pasta `release/` acumula instaladores antigos (medido ~7,36 GB). Pode limpar com segurança os
-`.exe`/`.blockmap` de versões antigas e a `win-unpacked` entre builds. Não é versionada.
+Pastas `release/` (legado Electron), `dist-shell/`, `installer/Output/` e `runtime/` acumulam
+artefatos de build. Podem ser limpas entre builds; não são versionadas.

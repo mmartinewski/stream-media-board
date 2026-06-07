@@ -108,32 +108,33 @@ After the build, Express serves the static frontend from `frontend/dist/`.
 
 ## Windows Installer
 
+Requires [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install -e --id JRSoftware.InnoSetup`) and [Go](https://go.dev/) on the build machine.
+
 ```bash
 npm run installer:win
 ```
 
-Or run the steps manually:
+Signed build (self-signed cert — see `scripts/make-selfsigned-cert.ps1`):
 
 ```bash
-npm install
-npm run fetch:bin
-npm run dist:win
+npm run cert:make          # once
+npm run cert:trust         # once per build machine
+npm run dist:signed
 ```
 
-The installer is generated under `release/`, for example:
+The installer is generated under `installer/Output/`, for example:
 
 ```text
-release/Stream Media Board Setup 0.9.0.exe
+installer/Output/StreamMediaBoard-Setup-0.17.0.exe
 ```
 
 The installed **Stream Media Board** app runs in the Windows tray and exposes:
 
 - **Open in Browser** — local web UI (dashboard).
+- **Sign in to YouTube** — WebView2 login window.
 - **Exit** — stop playback and shut down the backend.
 
-Use `npm run pack:win` for an unpacked smoke-test build.
-
-`release/` is ignored by Git; installers are published via **GitHub Releases**.
+`installer/Output/` and `dist-shell/` are ignored by Git; installers are published via **GitHub Releases**.
 
 ### Publish installer to GitHub Releases
 
@@ -143,7 +144,7 @@ Requires [GitHub CLI](https://cli.github.com/) (`gh auth login`).
 npm run publish:win
 ```
 
-Upload only (installer already in `release/`):
+Upload only (installer already in `installer/Output/`):
 
 ```bash
 npm run publish:release
@@ -181,18 +182,19 @@ Optionally copy `config/config.example.json` to `config/config.json` to adjust t
 
 Cookies: `%APPDATA%/LocalSoundboardServer/youtube.cookies.txt`
 
-From the web UI: `soundboard://youtube-login` (desktop app must be running).
+From the web UI: `soundboard://youtube-login` (tray app must be running).
 
 ## Structure
 
 ```text
 backend/    API Express, SQLite, FFmpeg, yt-dlp
 frontend/   React + Vite + Tailwind
-desktop/    Electron tray app
+shell/      Native Go tray app (WebView2 YouTube login)
 bin/        unversioned local executables
+runtime/    bundled node.exe for the packaged app (git-ignored)
 config/     configuration example
 docs/       setup guides, layout stage spec
-scripts/    build and publish utilities
+scripts/    build, signing, and publish utilities
 ```
 
 ## GitHub Notes

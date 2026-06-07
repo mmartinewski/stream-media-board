@@ -81,10 +81,9 @@ export function resolvePaths(): AppPaths {
 
 function resolveYtDlpNodeExe(): string | null {
   // yt-dlp solves YouTube JS challenges through an external runtime
-  // (`--js-runtimes node:<exe>`). In the packaged desktop app the runtime is the
-  // Electron binary itself, run as Node via ELECTRON_RUN_AS_NODE=1 (set by
-  // desktop/main.cjs). That env var is inherited by yt-dlp and its children, so
-  // launching the Electron binary here behaves like a plain Node process.
+  // (`--js-runtimes node:<exe>`). In the packaged app the native shell launches
+  // the backend with NODE_BINARY/YTDLP_JS_RUNTIME pointing at the bundled
+  // node.exe; those env vars are inherited by yt-dlp and its children.
   const fromEnv = process.env.YTDLP_JS_RUNTIME?.trim();
   if (fromEnv && existsSync(fromEnv)) return fromEnv;
 
@@ -97,17 +96,9 @@ function resolveYtDlpNodeExe(): string | null {
 }
 
 function resolveRuntimeRoot(): string {
+  // The native shell always sets PERSONAL_CLIP_PLAYER_ROOT to the install dir.
+  // In dev (`npm run dev`) the env var is absent, so fall back to the repo root.
   if (explicitRuntimeRoot) return resolve(explicitRuntimeRoot);
-
-  const electronProcess = process as NodeJS.Process & {
-    defaultApp?: boolean;
-    resourcesPath?: string;
-  };
-  const electronResourcesPath = electronProcess.resourcesPath;
-  if (process.versions.electron && electronResourcesPath && !electronProcess.defaultApp) {
-    return electronResourcesPath;
-  }
-
   return repoRootCandidate;
 }
 

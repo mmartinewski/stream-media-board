@@ -8,8 +8,9 @@ npm install
 
 Write-Host "[installer] Fetching runtime binaries..."
 npm run fetch:bin
+npm run fetch:node
 
-Write-Host "[installer] Building Windows installer..."
-npm run dist:win
+Write-Host "[installer] Building Windows installer (Inno Setup)..."
+node scripts\build-installer-inno.mjs
 
-Write-Host "[installer] Done. Check the release directory for the generated installer."
+Write-Host "[installer] Done. Check installer/Output/ for the generated installer."

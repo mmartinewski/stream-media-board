@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build (optional) and publish the Windows NSIS installer to GitHub Releases via `gh`.
+ * Build (optional) and publish the Windows Inno Setup installer to GitHub Releases via `gh`.
  *
  * Usage:
  *   npm run publish:win          # installer:win + upload
@@ -101,27 +101,39 @@ function assertGhReady() {
   }
 }
 
-function findInstallerExe(version, productName) {
+function findInstallerExe(version) {
+  const outputDir = join(root, 'installer', 'Output');
+  const expected = join(outputDir, `StreamMediaBoard-Setup-${version}.exe`);
+  if (existsSync(expected)) {
+    return expected;
+  }
+
+  if (existsSync(outputDir)) {
+    const matches = readdirSync(outputDir).filter(
+      (name) =>
+        name.toLowerCase().endsWith('.exe') &&
+        name.includes('StreamMediaBoard-Setup') &&
+        name.includes(version),
+    );
+    if (matches.length === 1) {
+      return join(outputDir, matches[0]);
+    }
+  }
+
+  // Legacy electron-builder output (pre–Passo 5)
   const releaseDir = join(root, 'release');
-  if (!existsSync(releaseDir)) {
-    return null;
+  if (existsSync(releaseDir)) {
+    const legacy = readdirSync(releaseDir).filter(
+      (name) =>
+        name.toLowerCase().endsWith('.exe') &&
+        name.includes('Setup') &&
+        name.includes(version),
+    );
+    if (legacy.length === 1) {
+      return join(releaseDir, legacy[0]);
+    }
   }
 
-  const expected = `${productName} Setup ${version}.exe`;
-  const expectedPath = join(releaseDir, expected);
-  if (existsSync(expectedPath)) {
-    return expectedPath;
-  }
-
-  const matches = readdirSync(releaseDir).filter(
-    (name) =>
-      name.toLowerCase().endsWith('.exe') &&
-      name.includes('Setup') &&
-      name.includes(version),
-  );
-  if (matches.length === 1) {
-    return join(releaseDir, matches[0]);
-  }
   return null;
 }
 
@@ -138,6 +150,7 @@ function defaultReleaseNotes(version) {
   return [
     `## Stream Media Board ${version}`,
     '',
+    '- Native Go tray shell (replaces Electron — smaller install, less RAM in idle)',
     '- OBS / Streamlabs browser overlay (`/overlay/browser`)',
     '- YouTube video clips with trim and dashboard play to overlay',
     '- Audio clips with in-browser segment preview',
@@ -151,7 +164,6 @@ function main() {
 
   const pkg = readPackageJson();
   const version = pkg.version;
-  const productName = pkg.build?.productName ?? 'Stream Media Board';
   const tag = `v${version}`;
 
   if (!skipBuild) {
@@ -160,10 +172,10 @@ function main() {
     run(npm, ['run', 'installer:win']);
   }
 
-  const installerPath = findInstallerExe(version, productName);
+  const installerPath = findInstallerExe(version);
   if (!installerPath) {
     console.error(
-      `[publish] Installer not found in release/. Expected something like "${productName} Setup ${version}.exe".`,
+      `[publish] Installer not found. Expected installer/Output/StreamMediaBoard-Setup-${version}.exe`,
     );
     console.error('Run `npm run installer:win` first, or use `npm run publish:win`.');
     process.exit(1);

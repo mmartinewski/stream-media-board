@@ -5,6 +5,16 @@ release/
 coverage/
 desktop-runtime/
 
+# Native shell (Go) build artifacts + bundled Node runtime + staged installer
+shell/*.exe
+runtime/
+dist-shell/
+installer/Output/
+
+# Code-signing material (NEVER commit private keys)
+certs/
+*.pfx
+
 bin/*.exe
 bin/*.dll
 bin/*.zip
