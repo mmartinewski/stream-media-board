@@ -7,7 +7,6 @@ export function assertBinaries(paths: AppPaths): void {
   for (const [label, p] of [
     ['ffmpeg.exe', paths.ffmpegExe],
     ['ffprobe.exe', paths.ffprobeExe],
-    ['ffplay.exe', paths.ffplayExe],
     ['yt-dlp.exe', paths.ytDlpExe],
   ] as const) {
     if (!existsSync(p)) missing.push(label);

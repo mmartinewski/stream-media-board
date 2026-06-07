@@ -6,7 +6,6 @@ import { closeLogger, initLogger, logger } from './lib/logger.js';
 import { migrate } from './db/migrate.js';
 import { closeDb, getDb } from './db/connection.js';
 import { cleanupExpiredStaging } from './services/stagingStore.js';
-import { stopActivePlayback } from './services/audioPlayer.js';
 import { backfillVideoClipMetadata } from './services/videoClipMetadata.js';
 
 export interface BackendServer {
@@ -53,7 +52,6 @@ export async function startBackendServer(): Promise<BackendServer> {
     if (stopped) return;
     stopped = true;
     logger.info(`received ${signal}, shutting down...`);
-    stopActivePlayback();
     await closeServer(server);
     closeDb();
     closeLogger();

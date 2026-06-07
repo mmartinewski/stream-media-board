@@ -1,7 +1,7 @@
 {
   "name": "stream-media-board",
   "private": true,
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "LAN clip dashboard and browser overlay for streaming — YouTube audio and video clips for any app with a browser source.",
   "main": "desktop/main.cjs",
   "workspaces": [
@@ -18,9 +18,11 @@
     "build": "npm run build:frontend && npm run build:backend",
     "start": "npm --workspace backend run start",
     "desktop:dev": "npm run build && electron .",
-    "prepare:desktop-runtime": "node scripts/prepare-desktop-runtime.mjs",
-    "pack:win": "npm run prepare:desktop-runtime && npm run build && electron-builder --win dir",
-    "dist:win": "npm run prepare:desktop-runtime && npm run build && electron-builder --win nsis",
+    "rebuild:dev": "node scripts/switch-better-sqlite3-abi.mjs node",
+    "abi:electron": "node scripts/switch-better-sqlite3-abi.mjs electron",
+    "abi:node": "node scripts/switch-better-sqlite3-abi.mjs node",
+    "pack:win": "npm run build && node scripts/package-win.mjs dir",
+    "dist:win": "npm run build && node scripts/package-win.mjs nsis",
     "installer:win": "powershell -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
     "publish:release": "node scripts/publish-release.mjs --skip-build",
     "publish:win": "node scripts/publish-release.mjs"
@@ -36,7 +38,7 @@
     "sharp": "^0.33.0"
   },
   "devDependencies": {
-    "electron": "^42.1.0",
+    "electron": "^41.0.0",
     "electron-builder": "^26.8.1",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.4.0"
@@ -44,7 +46,11 @@
   "build": {
     "appId": "com.mmartinewski.personal-soundboard-player",
     "productName": "Stream Media Board",
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "bin/**",
+      "**/*.node"
+    ],
     "npmRebuild": false,
     "directories": {
       "output": "release"
@@ -55,14 +61,9 @@
       "backend/dist/**/*",
       "frontend/dist/**/*",
       "bin/*.exe",
+      "bin/*.dll",
       "config/config.example.json",
       "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "desktop-runtime/node.exe",
-        "to": "node/node.exe"
-      }
     ],
     "win": {
       "icon": "desktop/assets/play.ico",

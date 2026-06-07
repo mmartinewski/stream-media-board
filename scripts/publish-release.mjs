@@ -140,7 +140,7 @@ function defaultReleaseNotes(version) {
     '',
     '- OBS / Streamlabs browser overlay (`/overlay/browser`)',
     '- YouTube video clips with trim and dashboard play to overlay',
-    '- Audio clips with local ffplay playback',
+    '- Audio clips with in-browser segment preview',
     '',
     'See the repository README for setup and browser source configuration.',
   ].join('\n');

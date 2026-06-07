@@ -6,6 +6,7 @@ coverage/
 desktop-runtime/
 
 bin/*.exe
+bin/*.dll
 bin/*.zip
 bin/*.part
 bin/_*/

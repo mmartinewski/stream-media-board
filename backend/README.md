@@ -1,6 +1,6 @@
 # backend
 
-Express + TypeScript server that persists data in SQLite (`better-sqlite3`), invokes `yt-dlp` and FFmpeg, and triggers local audio playback through `ffplay.exe`.
+Express + TypeScript server that persists data in SQLite (`better-sqlite3`), invokes `yt-dlp` and FFmpeg, and streams clip/segment previews to the browser.
 
 ## Scripts
 

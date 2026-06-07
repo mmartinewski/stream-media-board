@@ -87,19 +87,36 @@ async function startBackend() {
     : path.resolve(__dirname, '..');
   const port = resolvePort(runtimeRoot);
   const url = `http://127.0.0.1:${port}`;
+  // Packaged: run the backend with Electron's own binary acting as Node
+  // (ELECTRON_RUN_AS_NODE=1), so we don't ship a separate node.exe. The env var
+  // is inherited by descendant processes (e.g. yt-dlp's `--js-runtimes node:<exe>`),
+  // so they also run the Electron binary as Node.
   const nodeBinary = app.isPackaged
-    ? path.join(process.resourcesPath, 'node', 'node.exe')
+    ? process.execPath
     : process.env.NODE_BINARY || 'node';
   const backendEntry = path.join(app.getAppPath(), 'backend', 'dist', 'index.js');
 
+  const backendEnv = {
+    ...process.env,
+    PERSONAL_CLIP_PLAYER_ROOT: runtimeRoot,
+    NODE_BINARY: nodeBinary,
+    YTDLP_JS_RUNTIME: nodeBinary,
+  };
+  if (app.isPackaged) {
+    backendEnv.ELECTRON_RUN_AS_NODE = '1';
+  }
+
+  // With asar enabled, app.getAppPath() points at `resources/app.asar` — a FILE,
+  // not a directory — so it can't be the spawn cwd (spawn fails with ENOENT).
+  // PERSONAL_CLIP_PLAYER_ROOT still points inside the asar (Electron resolves
+  // frontend/bin paths there), but cwd must be a real directory on disk.
+  const spawnCwd = app.isPackaged
+    ? process.resourcesPath
+    : runtimeRoot;
+
   const child = spawn(nodeBinary, [backendEntry], {
-    cwd: runtimeRoot,
-    env: {
-      ...process.env,
-      PERSONAL_CLIP_PLAYER_ROOT: runtimeRoot,
-      NODE_BINARY: nodeBinary,
-      YTDLP_JS_RUNTIME: nodeBinary,
-    },
+    cwd: spawnCwd,
+    env: backendEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });

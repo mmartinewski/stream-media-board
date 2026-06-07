@@ -1,15 +1,18 @@
 #!/usr/bin/env node
-// Downloads ffmpeg + ffprobe + ffplay and yt-dlp.exe into /bin (Windows).
+// Downloads ffmpeg + ffprobe and yt-dlp.exe into /bin (Windows).
 //
-// By default, this uses **BtbN builds on GitHub** (stable mirror). The old
-// gyan.dev mirror tends to fail or hang on some networks.
+// By default, this uses the **BtbN "shared" build on GitHub** (stable mirror).
+// The shared build keeps the codecs in shared DLLs that the three executables
+// load at runtime, instead of statically linking ~200 MB into each .exe. This
+// cuts the bin/ footprint from ~630 MB to ~150 MB. The DLLs MUST live next to
+// the executables (i.e. inside bin/), otherwise the .exe files fail to start.
 //
 // Download priority:
 //   1) curl (curl.exe on Windows) - timeouts, retries, follows redirects (GitHub)
 //   2) Node fetch() - fallback
 //
 // Optional variables:
-//   FFMPEG_ZIP_URL   - override the FFmpeg ZIP URL (64-bit Windows build with ffplay)
+//   FFMPEG_ZIP_URL   - override the FFmpeg ZIP URL (64-bit Windows shared build)
 //
 // Usage:
 //   npm run fetch:bin
@@ -36,7 +39,7 @@ const BIN = join(ROOT, 'bin');
 /** GitHub builds are more reliable than gyan.dev for many users. */
 const FFMPEG_ZIP_URLS = [
   process.env.FFMPEG_ZIP_URL?.trim() ||
-    'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip',
+    'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip',
 ];
 
 const YTDLP_EXE_URL =
@@ -173,7 +176,9 @@ async function fetchFFmpeg() {
         throw new Error('ffmpeg.exe was not found inside the extracted ZIP.');
       }
 
-      for (const exe of ['ffmpeg.exe', 'ffprobe.exe', 'ffplay.exe']) {
+      // ffplay is intentionally NOT shipped: audio/video preview happens in the
+      // browser (GET /api/staging/:id/preview), not via server-side playback.
+      for (const exe of ['ffmpeg.exe', 'ffprobe.exe']) {
         const src = join(binDir, exe);
         const dst = join(BIN, exe);
         if (!existsSync(src)) {
@@ -182,6 +187,28 @@ async function fetchFFmpeg() {
         rmSync(dst, { force: true });
         renameSync(src, dst);
         console.log(`[fetch-binaries] OK ${dst}`);
+      }
+
+      // Remove a stale ffplay.exe from older (static) installs.
+      safeRemove(join(BIN, 'ffplay.exe'));
+
+      // Shared build: copy the DLLs (avcodec, avformat, avutil, swscale, ...)
+      // sitting next to the executables. Without them the .exe files won't run.
+      let dllCount = 0;
+      for (const entry of readdirSync(binDir)) {
+        if (!entry.toLowerCase().endsWith('.dll')) continue;
+        const src = join(binDir, entry);
+        const dst = join(BIN, entry);
+        rmSync(dst, { force: true });
+        renameSync(src, dst);
+        dllCount += 1;
+        console.log(`[fetch-binaries] OK ${dst}`);
+      }
+      if (dllCount === 0) {
+        throw new Error(
+          'No .dll files found next to ffmpeg.exe. This URL looks like a static build; ' +
+            'use a "*-shared.zip" build so the codecs ship as shared DLLs.',
+        );
       }
 
       safeRemove(tmpZip);
@@ -248,8 +275,8 @@ If it keeps failing on a corporate network or firewall:
   1. Open https://github.com/BtbN/FFmpeg-Builds/releases/latest
      and download the **win64 gpl** ZIP (ex.: ffmpeg-master-latest-win64-gpl.zip).
 
-  2. Extract it and copy **only** these files into this project folder:
-       ffmpeg.exe  ffprobe.exe  ffplay.exe
+  2. Extract it and copy these files into this project's bin/ folder:
+       ffmpeg.exe  ffprobe.exe  and all the .dll files next to them
 
   3. yt-dlp: https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
      Copy yt-dlp.exe into the bin/ folder.

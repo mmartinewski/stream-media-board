@@ -246,18 +246,6 @@ export const api = {
     });
     return `/api/staging/${encodeURIComponent(body.process_id)}/preview?${params.toString()}`;
   },
-  testPlayStaging: (body: {
-    process_id: string;
-    start_time: string;
-    end_time: string;
-    volume?: number;
-    audio_normalize?: boolean;
-  }) =>
-    request<{ status: string }>('/api/clips/test-play', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
   getClip: (id: number) => request<ClipDetail>(`/api/clips/${id}`),
   createClip: (form: FormData) =>
     request<{ id: number; message: string }>('/api/clips', {

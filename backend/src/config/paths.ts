@@ -28,7 +28,6 @@ export interface AppPaths {
   readonly bin: string;
   readonly ffmpegExe: string;
   readonly ffprobeExe: string;
-  readonly ffplayExe: string;
   readonly ytDlpExe: string;
   /** Node.js executable used by yt-dlp for YouTube JS challenges (EJS). */
   readonly ytDlpNodeExe: string | null;
@@ -71,9 +70,8 @@ export function resolvePaths(): AppPaths {
     bin,
     ffmpegExe: join(bin, 'ffmpeg.exe'),
     ffprobeExe: join(bin, 'ffprobe.exe'),
-    ffplayExe: join(bin, 'ffplay.exe'),
     ytDlpExe: join(bin, 'yt-dlp.exe'),
-    ytDlpNodeExe: resolveYtDlpNodeExe(runtimeRoot, bin),
+    ytDlpNodeExe: resolveYtDlpNodeExe(),
     configFile,
     youtubeCookiesFile: join(appData, 'youtube.cookies.txt'),
     frontendDist,
@@ -81,25 +79,17 @@ export function resolvePaths(): AppPaths {
   };
 }
 
-function resolveYtDlpNodeExe(runtimeRoot: string, bin: string): string | null {
+function resolveYtDlpNodeExe(): string | null {
+  // yt-dlp solves YouTube JS challenges through an external runtime
+  // (`--js-runtimes node:<exe>`). In the packaged desktop app the runtime is the
+  // Electron binary itself, run as Node via ELECTRON_RUN_AS_NODE=1 (set by
+  // desktop/main.cjs). That env var is inherited by yt-dlp and its children, so
+  // launching the Electron binary here behaves like a plain Node process.
   const fromEnv = process.env.YTDLP_JS_RUNTIME?.trim();
   if (fromEnv && existsSync(fromEnv)) return fromEnv;
 
   const nodeBinary = process.env.NODE_BINARY?.trim();
   if (nodeBinary && existsSync(nodeBinary)) return nodeBinary;
-
-  const electronProcess = process as NodeJS.Process & { resourcesPath?: string };
-  const electronResourcesPath = electronProcess.resourcesPath;
-  if (process.versions.electron && electronResourcesPath) {
-    const bundled = join(electronResourcesPath, 'node', 'node.exe');
-    if (existsSync(bundled)) return bundled;
-  }
-
-  const packagedNode = join(runtimeRoot, 'node', 'node.exe');
-  if (existsSync(packagedNode)) return packagedNode;
-
-  const binNode = join(bin, 'node.exe');
-  if (existsSync(binNode)) return binNode;
 
   if (existsSync(process.execPath)) return process.execPath;
 

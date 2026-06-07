@@ -18,7 +18,7 @@ Clips play on a transparent overlay in your stream; the dashboard triggers playb
 
 - Windows.
 - Node.js `>=20` (Node LTS recommended).
-- Local binaries in `bin/`: `ffmpeg.exe`, `ffprobe.exe`, `ffplay.exe`, and `yt-dlp.exe`.
+- Local binaries in `bin/`: `ffmpeg.exe`, `ffprobe.exe` (with their shared DLLs), and `yt-dlp.exe`.
 - A streaming app with a **Browser Source** (or equivalent web overlay).
 
 User data is stored outside the repository in `%APPDATA%/LocalSoundboardServer/` (legacy folder name; unchanged for upgrades).
