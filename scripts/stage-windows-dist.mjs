@@ -82,7 +82,24 @@ function buildApp() {
 function buildShell() {
   step('Building Go shell (windowsgui)');
   mkdirSync(DIST, { recursive: true });
+  const shellDir = join(ROOT, 'shell');
   const exeOut = join(DIST, 'StreamMediaBoard.exe');
+
+  // Embed play.ico into the PE so Explorer/taskbar show the app icon (not Go default).
+  run(
+    'go',
+    [
+      'run',
+      'github.com/tc-hib/go-winres@latest',
+      'simply',
+      '--icon',
+      'assets/play.ico',
+      '--manifest',
+      'gui',
+    ],
+    shellDir,
+  );
+
   run(
     'go',
     [
@@ -93,7 +110,7 @@ function buildShell() {
       exeOut,
       '.',
     ],
-    join(ROOT, 'shell'),
+    shellDir,
   );
 
   if (isSigningEnabled()) {

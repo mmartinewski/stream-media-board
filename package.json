@@ -1,7 +1,7 @@
 {
   "name": "stream-media-board",
   "private": true,
-  "version": "0.18.0",
+  "version": "0.18.1",
   "description": "LAN clip dashboard and browser overlay for streaming — YouTube audio and video clips for any app with a browser source.",
   "workspaces": [
     "backend",
