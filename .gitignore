@@ -11,6 +11,8 @@ shell/rsrc_windows_*.syso
 runtime/
 dist-shell/
 installer/Output/
+tmp-go-build/
+tmp-go-cache/
 
 # Code-signing material (NEVER commit private keys)
 certs/

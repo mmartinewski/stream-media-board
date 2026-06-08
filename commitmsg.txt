@@ -1,3 +1,0 @@
-Release v0.18.0: replace Electron with native Go shell and Inno installer.
-
-Step 5 complete: Go systray + WebView2 login, bundled Node 22, Inno Setup packaging, optional Authenticode signing, and removal of electron-builder/ABI scripts.

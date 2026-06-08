@@ -100,18 +100,21 @@ function buildShell() {
     shellDir,
   );
 
+  // Build as CONSOLE first, then patch PE subsystem to WINDOWS. Some AV products
+  // block go linker's temp a.out.exe when -H=windowsgui is used (Access is denied).
   run(
     'go',
     [
       'build',
       '-ldflags',
-      '-s -w -H=windowsgui',
+      '-s -w',
       '-o',
       exeOut,
       '.',
     ],
     shellDir,
   );
+  run('node', ['scripts/patch-pe-subsystem.mjs', exeOut]);
 
   if (isSigningEnabled()) {
     step('Signing the shell executable');
