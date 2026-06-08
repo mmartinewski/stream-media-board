@@ -43,7 +43,19 @@ export async function startBackendServer(): Promise<BackendServer> {
   }
 
   const app = createApp(paths);
-  const server = await listen(createServer(app), port);
+  logger.info(`binding HTTP server on 0.0.0.0:${port}...`);
+  let server: Server;
+  try {
+    server = await listen(createServer(app), port);
+  } catch (err) {
+    const code = err && typeof err === 'object' && 'code' in err ? String((err as NodeJS.ErrnoException).code) : '';
+    if (code === 'EADDRINUSE') {
+      logger.error(`port ${port} is already in use — close the other app or change port in config.json`, err);
+    } else {
+      logger.error(`failed to bind HTTP server on port ${port}`, err);
+    }
+    throw err;
+  }
 
   logger.info(`Express listening at http://0.0.0.0:${port}`);
 

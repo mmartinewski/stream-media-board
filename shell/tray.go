@@ -13,6 +13,7 @@ var iconICO []byte
 var (
 	mOpen  *systray.MenuItem
 	mLogin *systray.MenuItem
+	mLogs  *systray.MenuItem
 	mExit  *systray.MenuItem
 )
 
@@ -27,9 +28,15 @@ func onTrayReady() {
 	systray.SetTitle(appName)
 	systray.SetTooltip(appName + " starting...")
 
+	// Windows: without SetOnTapped, left-click opens the context menu (library default).
+	systray.SetOnTapped(func() {
+		openDashboard()
+	})
+
 	mOpen = systray.AddMenuItem("Open in Browser", "Open the dashboard in your browser")
 	mOpen.Disable()
 	mLogin = systray.AddMenuItem(loginLabel(), "Sign in to YouTube for audio/video downloads")
+	mLogs = systray.AddMenuItem("Open logs folder", "Open diagnostic logs (useful if startup fails)")
 	systray.AddSeparator()
 	mExit = systray.AddMenuItem("Exit", "Quit Stream Media Board")
 
@@ -44,6 +51,9 @@ func handleTrayClicks() {
 			openDashboard()
 		case <-mLogin.ClickedCh:
 			go openYoutubeLogin(appPaths, onYoutubeSaved)
+		case <-mLogs.ClickedCh:
+			_ = ensureLogsDir(appPaths)
+			openFolder(appPaths.logsDir)
 		case <-mExit.ClickedCh:
 			quitApp()
 			return
@@ -56,14 +66,14 @@ func startupBackend() {
 	if err != nil {
 		log.Printf("backend failed to start: %v", err)
 		systray.SetTooltip(appName + " - startup failed")
-		messageBox(appName, "Backend failed to start:\n\n"+err.Error(), mbOK|mbIconError)
+		messageBox(appName, "Backend failed to start:\n\n"+err.Error()+"\n\nTray → Open logs folder for details.", mbOK|mbIconError)
 		return
 	}
 	stateMu.Lock()
 	backendRef = b
 	stateMu.Unlock()
 
-	systray.SetTooltip(appName)
+	systray.SetTooltip(appName + " — left-click to open dashboard")
 	mOpen.Enable()
 
 	if pendingAct == "youtube-login" {

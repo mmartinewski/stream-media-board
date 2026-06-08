@@ -24,6 +24,9 @@ type paths struct {
 	nodeExe      string // node.exe used to run the backend
 	backendEntry string // backend/dist/index.js
 	appDataDir   string // %APPDATA%\LocalSoundboardServer
+	logsDir      string // %APPDATA%\LocalSoundboardServer\logs
+	backendLog   string // shell capture of node stdout/stderr
+	latestLog    string // backend latest.log (after logger init)
 	cookiesFile  string // youtube.cookies.txt
 	webviewData  string // isolated WebView2 user-data-folder for the login window
 	iconPath     string
@@ -64,12 +67,16 @@ func resolvePaths() (paths, error) {
 	}
 	appDataDir := filepath.Join(appData, appFolderName)
 
+	logsDir := filepath.Join(appDataDir, "logs")
 	p := paths{
 		installDir:   installDir,
 		appRoot:      appRoot,
 		nodeExe:      nodeExe,
 		backendEntry: filepath.Join(appRoot, "backend", "dist", "index.js"),
 		appDataDir:   appDataDir,
+		logsDir:      logsDir,
+		backendLog:   filepath.Join(logsDir, "shell-backend.log"),
+		latestLog:    filepath.Join(logsDir, "latest.log"),
 		cookiesFile:  filepath.Join(appDataDir, "youtube.cookies.txt"),
 		webviewData:  filepath.Join(appDataDir, "youtube-login-webview"),
 		iconPath:     filepath.Join(appRoot, "shell-assets", "play.ico"),
