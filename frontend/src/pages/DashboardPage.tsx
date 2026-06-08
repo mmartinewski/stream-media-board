@@ -132,7 +132,7 @@ export default function DashboardPage() {
   const [playPulse, setPlayPulse] = useState<{ id: number; token: number } | null>(null);
   const [toast, setToast] = useState<DashboardToast | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cardErrorTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const cardErrorTimersRef = useRef<Map<number, number>>(new Map());
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [favoriteId, setFavoriteId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
@@ -784,22 +784,35 @@ export default function DashboardPage() {
             (section.type === 'category' && section.category.id != null ? (
               <div className="relative mb-2 flex items-center justify-between gap-2">
                 <h3 className="min-w-0 flex-1 truncate text-base font-semibold">
-                  {section.category.name}
+                  <Link
+                    to={`/browse/categories/${section.category.id}`}
+                    className="hover:text-accent"
+                  >
+                    {section.category.name}
+                  </Link>
                 </h3>
-                <button
-                  type="button"
-                  aria-label="Open category menu"
-                  onClick={() =>
-                    setOpenCategoryMenuKey((current) =>
-                      current === `category-${section.category.id}`
-                        ? null
-                        : `category-${section.category.id}`,
-                    )
-                  }
-                  className="shrink-0 rounded-full border border-surface bg-bg px-2 py-1 text-lg leading-none text-text-muted hover:border-accent hover:text-text"
-                >
-                  ⋮
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Link
+                    to={`/browse/categories/${section.category.id}`}
+                    className="text-xs text-text-muted hover:text-accent"
+                  >
+                    View all →
+                  </Link>
+                  <button
+                    type="button"
+                    aria-label="Open category menu"
+                    onClick={() =>
+                      setOpenCategoryMenuKey((current) =>
+                        current === `category-${section.category.id}`
+                          ? null
+                          : `category-${section.category.id}`,
+                      )
+                    }
+                    className="rounded-full border border-surface bg-bg px-2 py-1 text-lg leading-none text-text-muted hover:border-accent hover:text-text"
+                  >
+                    ⋮
+                  </button>
+                </div>
                 {openCategoryMenuKey === `category-${section.category.id}` && (
                   <>
                     <button
@@ -826,15 +839,27 @@ export default function DashboardPage() {
                   </>
                 )}
               </div>
+            ) : section.type === 'favorites' ? (
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-base font-semibold">
+                  <Link to="/browse/favorites" className="hover:text-accent">
+                    Favorites
+                  </Link>
+                </h3>
+                <Link
+                  to="/browse/favorites"
+                  className="shrink-0 text-xs text-text-muted hover:text-accent"
+                >
+                  View all →
+                </Link>
+              </div>
             ) : (
               <h3 className="mb-2 text-base font-semibold">
-                {section.type === 'favorites'
-                  ? 'Favorites'
-                  : section.type === 'search'
-                    ? section.title
-                    : section.type === 'category'
-                      ? section.category.name
-                      : ''}
+                {section.type === 'search'
+                  ? section.title
+                  : section.type === 'category'
+                    ? section.category.name
+                    : ''}
               </h3>
             ))}
           {section.clips.length === 0 ? (

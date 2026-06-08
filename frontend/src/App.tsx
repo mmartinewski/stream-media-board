@@ -6,6 +6,8 @@ import ClipFormPage from './pages/ClipFormPage';
 import LayoutAreasPage from './pages/LayoutAreasPage';
 import ChecklistsListPage from './pages/ChecklistsListPage';
 import ChecklistEditorPage from './pages/ChecklistEditorPage';
+import BrowseCategoriesPage from './pages/BrowseCategoriesPage';
+import BrowseCategoryClipsPage from './pages/BrowseCategoryClipsPage';
 
 export default function App() {
   return (
@@ -13,6 +15,9 @@ export default function App() {
       <Route path="/overlay/browser" element={<BrowserSourcePage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/browse" element={<BrowseCategoriesPage />} />
+        <Route path="/browse/favorites" element={<BrowseCategoryClipsPage />} />
+        <Route path="/browse/categories/:categoryId" element={<BrowseCategoryClipsPage />} />
         <Route path="/checklists" element={<ChecklistsListPage />} />
         <Route path="/checklists/:id" element={<ChecklistEditorPage mode="edit" />} />
         <Route path="/clips/new" element={<ClipFormPage mode="create" />} />

@@ -1,13 +1,31 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
+import { GridViewIcon } from '../contexts/DashboardViewContext';
 import { APP_DISPLAY_NAME } from '../lib/appName';
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Media Board', end: true },
-  { to: '/checklists', label: 'Checklists', end: false },
-  { to: '/settings/layout-areas', label: 'Layout areas', end: false },
-] as const;
+const NAV_ICON_CLASS = 'h-4 w-4 shrink-0 opacity-80';
+
+const NAV_ITEMS: ReadonlyArray<{
+  to: string;
+  label: string;
+  end: boolean;
+  icon: ReactNode;
+}> = [
+  { to: '/', label: 'Media Board', end: true, icon: <GridViewIcon className={NAV_ICON_CLASS} /> },
+  {
+    to: '/checklists',
+    label: 'Checklists',
+    end: false,
+    icon: <ChecklistsIcon className={NAV_ICON_CLASS} />,
+  },
+  {
+    to: '/settings/layout-areas',
+    label: 'Layout areas',
+    end: false,
+    icon: <LayoutAreasIcon className={NAV_ICON_CLASS} />,
+  },
+];
 
 export default function AppSideMenu() {
   const [open, setOpen] = useState(false);
@@ -77,13 +95,14 @@ export default function AppSideMenu() {
                         to={item.to}
                         onClick={close}
                         className={
-                          'rounded-md px-3 py-2.5 text-sm font-medium transition-colors ' +
+                          'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ' +
                           (active
                             ? 'bg-accent/15 text-text'
                             : 'text-text-muted hover:bg-surface-soft hover:text-text')
                         }
                       >
-                        {item.label}
+                        {item.icon}
+                        <span>{item.label}</span>
                       </Link>
                     );
                   })}
@@ -106,6 +125,45 @@ function MenuIcon() {
         strokeWidth="2"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+function ChecklistsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    >
+      <rect x="3" y="4" width="5" height="5" rx="1" />
+      <path d="M4.5 6.5 5.8 7.8 7.5 5.5" />
+      <path d="M10 6.5h7" />
+      <rect x="3" y="11" width="5" height="5" rx="1" />
+      <path d="M10 13.5h7" />
+    </svg>
+  );
+}
+
+function LayoutAreasIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    >
+      <rect x="3" y="3" width="14" height="14" rx="1.5" />
+      <path d="M3 10h14M10 3v14" />
     </svg>
   );
 }
