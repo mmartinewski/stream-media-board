@@ -11,6 +11,7 @@ import { thumbnailsRouter } from './routes/thumbnails.js';
 import { settingsRouter } from './routes/settings.js';
 import { youtubeRouter } from './routes/youtube.js';
 import { categoriesRouter } from './routes/categories.js';
+import { categoryThumbnailsRouter } from './routes/categoryThumbnails.js';
 import { layoutAreasRouter } from './routes/layoutAreas.js';
 import { todoListsRouter } from './routes/todoLists.js';
 import { browserSourceRouter } from './routes/browserSource.js';
@@ -31,7 +32,8 @@ export function createApp(paths: AppPaths): Express {
   app.use('/api/thumbnails', thumbnailsRouter(paths));
   app.use('/api/settings', settingsRouter());
   app.use('/api/youtube', youtubeRouter());
-  app.use('/api/categories', categoriesRouter());
+  app.use('/api/categories', categoriesRouter(paths));
+  app.use('/api/category-thumbnails', categoryThumbnailsRouter(paths));
   app.use('/api/browser-source', browserSourceRouter(paths));
   app.use('/api/layout-areas', layoutAreasRouter());
   app.use('/api/todo-lists', todoListsRouter());

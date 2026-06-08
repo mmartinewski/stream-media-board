@@ -73,6 +73,9 @@ export function migrate(db: BetterDatabase): void {
   seedLayoutAreasIfEmpty(db);
   ensureTodoListsSchema(db);
   migrateClipCategories(db);
+  ensureColumn(db, 'categories', 'thumbnail_original_path', 'TEXT');
+  ensureColumn(db, 'categories', 'thumbnail_cropped_path', 'TEXT');
+  ensureColumn(db, 'categories', 'thumbnail_crop_meta', 'TEXT');
 }
 
 function migrateClipCategories(db: BetterDatabase): void {

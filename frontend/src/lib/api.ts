@@ -124,6 +124,19 @@ export interface CategorySummary {
   id: number;
   name: string;
   clip_count: number;
+  thumbnail_original_url?: string | null;
+  thumbnail_cropped_url?: string | null;
+  thumbnail_crop_meta?: string | null;
+}
+
+export interface CategoryDetail {
+  id: number;
+  name: string;
+  thumbnail_original_url?: string | null;
+  thumbnail_cropped_url?: string | null;
+  thumbnail_crop_meta?: string | null;
+  clip_count?: number;
+  message?: string;
 }
 
 export interface CategoryClipsResponse {
@@ -319,16 +332,22 @@ export const api = {
   getClipVideoDownloadUrl: (id: number) => `/api/clips/${id}/video?download=1`,
   getCategories: () =>
     request<{ categories: CategorySummary[] }>('/api/categories'),
+  getCategory: (id: number) => request<CategoryDetail>(`/api/categories/${id}`),
   getCategoryClips: (id: number, search?: string) =>
     request<CategoryClipsResponse>(
       `/api/categories/${id}/clips` +
         (search ? `?search=${encodeURIComponent(search)}` : ''),
     ),
   renameCategory: (id: number, name: string) =>
-    request<{ id: number; name: string; message: string }>(`/api/categories/${id}`, {
+    request<CategoryDetail & { message: string }>(`/api/categories/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
+    }),
+  updateCategory: (id: number, body: FormData) =>
+    request<CategoryDetail & { message: string }>(`/api/categories/${id}`, {
+      method: 'PUT',
+      body,
     }),
   updateClipMetadata: (
     id: number,

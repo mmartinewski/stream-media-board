@@ -16,6 +16,7 @@ import {
   type LayoutSettingsResponse,
 } from '../lib/api';
 import { useDashboardView } from '../contexts/DashboardViewContext';
+import CategoryEditModal from '../components/CategoryEditModal';
 import { clampClipVolume, clipVolumeMax } from '../lib/volume';
 
 function resolvePlayLayoutAreaId(
@@ -138,13 +139,9 @@ export default function DashboardPage() {
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
   const [openCategoryMenuKey, setOpenCategoryMenuKey] = useState<string | null>(null);
-  const [categoryToRename, setCategoryToRename] = useState<{ id: number; name: string } | null>(
+  const [categoryToEdit, setCategoryToEdit] = useState<{ id: number; name: string } | null>(
     null,
   );
-  const [categoryRenameName, setCategoryRenameName] = useState('');
-  const [categoryRenameSaving, setCategoryRenameSaving] = useState(false);
-  const [categoryRenameError, setCategoryRenameError] = useState<string | null>(null);
-  const categoryRenameNameRef = useRef<HTMLInputElement>(null);
   const [clipToDelete, setClipToDelete] = useState<ClipDto | null>(null);
   const [clipToEditMetadata, setClipToEditMetadata] = useState<ClipDto | null>(null);
   const [metadataTitle, setMetadataTitle] = useState('');
@@ -429,64 +426,10 @@ export default function DashboardPage() {
     setMetadataDefaultLayoutAreaId('');
   }, [metadataSaving]);
 
-  const closeCategoryRenameModal = useCallback(() => {
-    if (categoryRenameSaving) return;
-    setCategoryToRename(null);
-    setCategoryRenameError(null);
-  }, [categoryRenameSaving]);
-
-  const openCategoryRename = (category: { id: number; name: string }) => {
+  const openCategoryEdit = (category: { id: number; name: string }) => {
     setOpenCategoryMenuKey(null);
-    setCategoryToRename(category);
-    setCategoryRenameName(category.name);
-    setCategoryRenameError(null);
+    setCategoryToEdit(category);
   };
-
-  const saveCategoryRename = useCallback(async () => {
-    if (!categoryToRename || categoryRenameSaving) return;
-    const name = categoryRenameName.trim();
-    if (!name) {
-      setCategoryRenameError('Category name is required.');
-      return;
-    }
-
-    setCategoryRenameError(null);
-    setCategoryRenameSaving(true);
-    try {
-      await api.renameCategory(categoryToRename.id, name);
-      setCategoryToRename(null);
-      await reloadClips();
-    } catch (err) {
-      setCategoryRenameError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setCategoryRenameSaving(false);
-    }
-  }, [categoryToRename, categoryRenameName, categoryRenameSaving]);
-
-  const saveCategoryRenameRef = useRef(saveCategoryRename);
-  saveCategoryRenameRef.current = saveCategoryRename;
-
-  useEffect(() => {
-    if (!categoryToRename) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeCategoryRenameModal();
-      if (isModalSubmitShortcut(event)) {
-        event.preventDefault();
-        void saveCategoryRenameRef.current();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [categoryToRename?.id, closeCategoryRenameModal]);
-
-  useEffect(() => {
-    if (!categoryToRename) return;
-    const focusTimer = window.setTimeout(() => {
-      categoryRenameNameRef.current?.focus();
-      categoryRenameNameRef.current?.select();
-    }, 0);
-    return () => window.clearTimeout(focusTimer);
-  }, [categoryToRename?.id]);
 
   const openMetadataEditor = (clip: ClipDto) => {
     setOpenMenuKey(null);
@@ -825,7 +768,7 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={() =>
-                          openCategoryRename({
+                          openCategoryEdit({
                             id: section.category.id!,
                             name: section.category.name,
                           })
@@ -1277,62 +1220,14 @@ export default function DashboardPage() {
           )}
         </article>
       ))}
-      {categoryToRename && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="rename-category-title"
-          onClick={closeCategoryRenameModal}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-        >
-          <div
-            className="w-full max-w-sm rounded-lg border border-surface bg-bg p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="rename-category-title" className="text-lg font-semibold">
-              Edit category
-            </h2>
-            <p className="mt-1 text-sm text-text-muted">
-              Renaming updates every clip in this category.
-            </p>
-            <div className="mt-4">
-              <label htmlFor="rename-category-name" className="block text-sm font-medium">
-                Category name
-              </label>
-              <input
-                ref={categoryRenameNameRef}
-                id="rename-category-name"
-                value={categoryRenameName}
-                onChange={(e) => setCategoryRenameName(e.target.value)}
-                disabled={categoryRenameSaving}
-                className="mt-1 w-full rounded-md border border-surface bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
-              />
-            </div>
-            {categoryRenameError && (
-              <p className="mt-3 text-sm text-red-200">{categoryRenameError}</p>
-            )}
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeCategoryRenameModal}
-                disabled={categoryRenameSaving}
-                className="rounded-md border border-surface px-4 py-2 text-sm hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void saveCategoryRename()}
-                title="Save (Ctrl+Enter)"
-                disabled={categoryRenameSaving}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-bg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {categoryRenameSaving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {categoryToEdit ? (
+        <CategoryEditModal
+          categoryId={categoryToEdit.id}
+          initialName={categoryToEdit.name}
+          onClose={() => setCategoryToEdit(null)}
+          onSaved={() => void reloadClips()}
+        />
+      ) : null}
       {clipToEditMetadata && (
         <div
           role="dialog"

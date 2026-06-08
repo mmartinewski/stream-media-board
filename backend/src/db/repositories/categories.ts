@@ -4,11 +4,17 @@ export interface CategoryRow {
   id: number;
   name: string;
   created_at: string;
+  thumbnail_original_path: string | null;
+  thumbnail_cropped_path: string | null;
+  thumbnail_crop_meta: string | null;
 }
+
+const CATEGORY_COLUMNS =
+  'id, name, created_at, thumbnail_original_path, thumbnail_cropped_path, thumbnail_crop_meta';
 
 export function listCategories(db: BetterDatabase): CategoryRow[] {
   return db
-    .prepare('SELECT id, name, created_at FROM categories ORDER BY name COLLATE NOCASE ASC')
+    .prepare(`SELECT ${CATEGORY_COLUMNS} FROM categories ORDER BY name COLLATE NOCASE ASC`)
     .all() as CategoryRow[];
 }
 
@@ -17,7 +23,7 @@ export function getCategoryById(
   id: number,
 ): CategoryRow | undefined {
   return db
-    .prepare('SELECT id, name, created_at FROM categories WHERE id = ?')
+    .prepare(`SELECT ${CATEGORY_COLUMNS} FROM categories WHERE id = ?`)
     .get(id) as CategoryRow | undefined;
 }
 
@@ -49,6 +55,36 @@ export function renameCategory(
   return getCategoryById(db, id)!;
 }
 
+export function updateCategoryThumbnails(
+  db: BetterDatabase,
+  id: number,
+  thumbnails: {
+    thumbnail_original_path: string | null;
+    thumbnail_cropped_path: string | null;
+    thumbnail_crop_meta: string | null;
+  },
+): CategoryRow {
+  const current = getCategoryById(db, id);
+  if (!current) {
+    throw new Error('Category not found.');
+  }
+
+  db.prepare(
+    `UPDATE categories
+     SET thumbnail_original_path = ?,
+         thumbnail_cropped_path = ?,
+         thumbnail_crop_meta = ?
+     WHERE id = ?`,
+  ).run(
+    thumbnails.thumbnail_original_path,
+    thumbnails.thumbnail_cropped_path,
+    thumbnails.thumbnail_crop_meta,
+    id,
+  );
+
+  return getCategoryById(db, id)!;
+}
+
 export function findOrCreateCategory(
   db: BetterDatabase,
   name: string,
@@ -59,7 +95,7 @@ export function findOrCreateCategory(
   }
 
   const existing = db
-    .prepare('SELECT id, name, created_at FROM categories WHERE name = ?')
+    .prepare(`SELECT ${CATEGORY_COLUMNS} FROM categories WHERE name = ?`)
     .get(trimmed) as CategoryRow | undefined;
 
   if (existing) return existing;
@@ -72,5 +108,8 @@ export function findOrCreateCategory(
     id: Number(result.lastInsertRowid),
     name: trimmed,
     created_at: new Date().toISOString(),
+    thumbnail_original_path: null,
+    thumbnail_cropped_path: null,
+    thumbnail_crop_meta: null,
   };
 }

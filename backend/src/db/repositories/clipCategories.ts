@@ -99,6 +99,9 @@ export interface CategoryWithClipCount {
   id: number;
   name: string;
   clip_count: number;
+  thumbnail_original_path: string | null;
+  thumbnail_cropped_path: string | null;
+  thumbnail_crop_meta: string | null;
 }
 
 export function listCategoriesWithClipCount(
@@ -106,7 +109,12 @@ export function listCategoriesWithClipCount(
 ): CategoryWithClipCount[] {
   return db
     .prepare(
-      `SELECT cat.id, cat.name, COUNT(DISTINCT cc.clip_id) AS clip_count
+      `SELECT cat.id,
+              cat.name,
+              cat.thumbnail_original_path,
+              cat.thumbnail_cropped_path,
+              cat.thumbnail_crop_meta,
+              COUNT(DISTINCT cc.clip_id) AS clip_count
        FROM categories cat
        LEFT JOIN clip_categories cc ON cc.category_id = cat.id
        GROUP BY cat.id

@@ -4,6 +4,9 @@
 CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
+    thumbnail_original_path TEXT,
+    thumbnail_cropped_path TEXT,
+    thumbnail_crop_meta TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
