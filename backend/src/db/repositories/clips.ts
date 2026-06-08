@@ -25,52 +25,73 @@ export interface ClipRow {
   created_at: string;
 }
 
-export interface ClipWithCategory extends ClipRow {
+export interface ClipListRow extends ClipRow {
+  section_category_id: number | null;
   category_name: string | null;
 }
 
-export function listClipsWithCategory(
-  db: BetterDatabase,
-  search?: string,
-): ClipWithCategory[] {
+const LIST_ORDER =
+  'c.is_favorite DESC, cat.name COLLATE NOCASE ASC, c.title COLLATE NOCASE ASC';
+
+const LIST_FROM = `
+  FROM clips c
+  LEFT JOIN clip_categories cc ON cc.clip_id = c.id
+  LEFT JOIN categories cat ON cat.id = cc.category_id`;
+
+function buildListWhere(search?: string): { sql: string; params: string[] } {
   const filter = search?.trim();
   if (!filter) {
-    return db
-      .prepare(
-        `SELECT c.*, cat.name AS category_name
-         FROM clips c
-         LEFT JOIN categories cat ON cat.id = c.category_id
-         ORDER BY c.is_favorite DESC, cat.name COLLATE NOCASE ASC, c.title COLLATE NOCASE ASC`,
-      )
-      .all() as ClipWithCategory[];
+    return { sql: '', params: [] };
   }
-
   const like = `%${filter}%`;
-  return db
-    .prepare(
-      `SELECT c.*, cat.name AS category_name
-       FROM clips c
-       LEFT JOIN categories cat ON cat.id = c.category_id
-       WHERE c.title LIKE ? COLLATE NOCASE
+  return {
+    sql: ` WHERE c.title LIKE ? COLLATE NOCASE
           OR cat.name LIKE ? COLLATE NOCASE
-          OR IFNULL(c.tags,'') LIKE ? COLLATE NOCASE
-       ORDER BY c.is_favorite DESC, cat.name COLLATE NOCASE ASC, c.title COLLATE NOCASE ASC`,
-    )
-    .all(like, like, like) as ClipWithCategory[];
+          OR IFNULL(c.tags,'') LIKE ? COLLATE NOCASE`,
+    params: [like, like, like],
+  };
 }
 
-export function getClipWithCategoryById(
+export function listClipsForDashboard(
   db: BetterDatabase,
-  id: number,
-): ClipWithCategory | undefined {
+  search?: string,
+): ClipListRow[] {
+  const { sql: whereSql, params } = buildListWhere(search);
   return db
     .prepare(
-      `SELECT c.*, cat.name AS category_name
-       FROM clips c
-       LEFT JOIN categories cat ON cat.id = c.category_id
-       WHERE c.id = ?`,
+      `SELECT c.*, cat.id AS section_category_id, cat.name AS category_name
+       ${LIST_FROM}
+       ${whereSql}
+       ORDER BY ${LIST_ORDER}`,
     )
-    .get(id) as ClipWithCategory | undefined;
+    .all(...params) as ClipListRow[];
+}
+
+export function listClipsInCategory(
+  db: BetterDatabase,
+  categoryId: number,
+  search?: string,
+): ClipListRow[] {
+  const filter = search?.trim();
+  const params: Array<string | number> = [categoryId];
+  let searchSql = '';
+  if (filter) {
+    const like = `%${filter}%`;
+    searchSql = ` AND (c.title LIKE ? COLLATE NOCASE OR IFNULL(c.tags,'') LIKE ? COLLATE NOCASE)`;
+    params.push(like, like);
+  }
+
+  return db
+    .prepare(
+      `SELECT c.*, cat.id AS section_category_id, cat.name AS category_name
+       FROM clips c
+       INNER JOIN clip_categories cc ON cc.clip_id = c.id
+       INNER JOIN categories cat ON cat.id = cc.category_id
+       WHERE cc.category_id = ?
+       ${searchSql}
+       ORDER BY c.is_favorite DESC, c.title COLLATE NOCASE ASC`,
+    )
+    .all(...params) as ClipListRow[];
 }
 
 export function getClipById(

@@ -768,7 +768,8 @@ export default function ClipFormPage({ mode }: Props) {
   const [startTime, setStartTime] = useState('00:00:00.000');
   const [endTime, setEndTime] = useState('00:00:30.000');
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState('');
+  const [categories, setCategories] = useState<string[]>([]);
+  const [categoryInput, setCategoryInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
@@ -827,7 +828,7 @@ export default function ClipFormPage({ mode }: Props) {
   const thumbReady = Boolean(thumbPreviewSrc && crop);
   const canSaveCreate =
     mode === 'create' &&
-    Boolean(processId && thumbFile && title.trim() && category.trim() && thumbReady) &&
+    Boolean(processId && thumbFile && title.trim() && categories.length > 0 && thumbReady) &&
     timesOk &&
     clipLenOk &&
     durationOk;
@@ -835,7 +836,7 @@ export default function ClipFormPage({ mode }: Props) {
     mode === 'edit' &&
     Number.isInteger(clipId) &&
     clipId >= 1 &&
-    Boolean(processId && title.trim() && category.trim() && thumbReady) &&
+    Boolean(processId && title.trim() && categories.length > 0 && thumbReady) &&
     timesOk &&
     clipLenOk &&
     durationOk;
@@ -927,7 +928,14 @@ export default function ClipFormPage({ mode }: Props) {
         const c = await api.getClip(clipId);
         if (cancelled) return;
         setTitle(c.title);
-        setCategory(c.category.name ?? '');
+        setCategories(
+          c.categories?.length
+            ? c.categories.map((category) => category.name)
+            : c.category.name
+              ? [c.category.name]
+              : [],
+        );
+        setCategoryInput('');
         setTags(parseTags(c.tags ?? ''));
         setIsFavorite(c.is_favorite === 1);
         const isVideoClip = c.clip_type === 'video';
@@ -1089,7 +1097,7 @@ export default function ClipFormPage({ mode }: Props) {
   useEffect(() => {
     let cancelled = false;
     api
-      .getCategorySuggestions(category)
+      .getCategorySuggestions(categoryInput)
       .then((res) => {
         if (!cancelled) {
           setCategorySuggestions(res.categories.map((c) => c.name));
@@ -1101,7 +1109,7 @@ export default function ClipFormPage({ mode }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [category]);
+  }, [categoryInput]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1382,13 +1390,31 @@ export default function ClipFormPage({ mode }: Props) {
     setTags((current) => current.filter((tag) => tag !== tagToRemove));
   };
 
+  const addCategory = (raw: string) => {
+    const next = raw.trim();
+    if (!next) return;
+    setCategories((current) => {
+      const exists = current.some(
+        (category) => category.toLocaleLowerCase('en') === next.toLocaleLowerCase('en'),
+      );
+      return exists ? current : [...current, next];
+    });
+    setCategoryInput('');
+  };
+
+  const removeCategory = (categoryToRemove: string) => {
+    setCategories((current) =>
+      current.filter((category) => category !== categoryToRemove),
+    );
+  };
+
   const buildFormData = (): FormData => {
     const fd = new FormData();
     fd.append('youtube_url', sourceReference.trim());
     fd.append('start_time', startTime.trim());
     fd.append('end_time', endTime.trim());
     fd.append('title', title.trim());
-    fd.append('category', category.trim());
+    fd.append('categories', categories.join(', '));
     fd.append('tags', tags.join(', '));
     fd.append('process_id', processId);
     fd.append('is_favorite', isFavorite ? '1' : '0');
@@ -2018,26 +2044,62 @@ export default function ClipFormPage({ mode }: Props) {
             />
           </div>
           <div>
-            <label htmlFor="category" className="block text-sm font-medium">
-              Category
+            <label htmlFor="categories" className="block text-sm font-medium">
+              Categories
             </label>
-            <input
-              id="category"
-              list="category-suggestions"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              required
-              placeholder="Category name"
-              className="mt-1 w-full rounded-md border border-surface bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
-            />
+            <div className="mt-1 flex gap-2">
+              <input
+                id="categories"
+                list="category-suggestions"
+                value={categoryInput}
+                onChange={(e) => setCategoryInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addCategory(categoryInput);
+                  }
+                }}
+                placeholder="Type a category"
+                className="min-w-0 flex-1 rounded-md border border-surface bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+              <button
+                type="button"
+                onClick={() => addCategory(categoryInput)}
+                disabled={!categoryInput.trim()}
+                className="rounded-md border border-surface px-3 py-2 text-sm font-medium hover:border-accent disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Add
+              </button>
+            </div>
             <datalist id="category-suggestions">
               {categorySuggestions.map((name) => (
                 <option key={name} value={name} />
               ))}
             </datalist>
-            <p className="mt-1 text-xs text-text-muted">
-              If the category does not exist, it will be created when you save.
-            </p>
+            {categories.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {categories.map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1 rounded-full border border-surface bg-bg px-2.5 py-1 text-xs"
+                  >
+                    {name}
+                    <button
+                      type="button"
+                      onClick={() => removeCategory(name)}
+                      aria-label={`Remove category ${name}`}
+                      className="text-text-muted hover:text-text"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-text-muted">
+                Add at least one category. New names are created when you save.
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="tags" className="block text-sm font-medium">

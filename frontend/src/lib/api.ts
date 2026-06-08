@@ -10,11 +10,17 @@ export interface SettingsResponse {
 
 export type ClipType = 'audio' | 'video';
 
+export interface CategoryRef {
+  id: number;
+  name: string;
+}
+
 export interface ClipDto {
   id: number;
   title: string;
   clip_type: ClipType;
   category: { id: number | null; name: string | null };
+  categories: CategoryRef[];
   tags: string;
   thumbnail_cropped_url: string;
   volume: number;
@@ -94,6 +100,7 @@ export interface ClipDetail {
   start_time: string;
   end_time: string;
   category: { id: number | null; name: string | null };
+  categories: CategoryRef[];
   tags: string;
   thumbnail_crop_meta: string | null;
   thumbnail_original_url: string;
@@ -111,6 +118,18 @@ export interface ClipDetail {
 export interface CategorySuggestion {
   id: number;
   name: string;
+}
+
+export interface CategorySummary {
+  id: number;
+  name: string;
+  clip_count: number;
+}
+
+export interface CategoryClipsResponse {
+  category: CategoryRef;
+  clips: ClipDto[];
+  playback_volume: number;
 }
 
 export interface YoutubeSessionResponse {
@@ -298,6 +317,13 @@ export const api = {
     request<BrowserSourceStatusResponse>('/api/browser-source/status'),
   getClipAudioDownloadUrl: (id: number) => `/api/clips/${id}/audio?download=1`,
   getClipVideoDownloadUrl: (id: number) => `/api/clips/${id}/video?download=1`,
+  getCategories: () =>
+    request<{ categories: CategorySummary[] }>('/api/categories'),
+  getCategoryClips: (id: number, search?: string) =>
+    request<CategoryClipsResponse>(
+      `/api/categories/${id}/clips` +
+        (search ? `?search=${encodeURIComponent(search)}` : ''),
+    ),
   renameCategory: (id: number, name: string) =>
     request<{ id: number; name: string; message: string }>(`/api/categories/${id}`, {
       method: 'PATCH',
@@ -308,7 +334,7 @@ export const api = {
     id: number,
     body: {
       title: string;
-      category: string;
+      categories: string[];
       tags: string;
       default_layout_area_id?: number | null;
     },

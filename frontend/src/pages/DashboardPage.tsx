@@ -64,6 +64,7 @@ const TOAST_CLASS: Record<DashboardToastVariant, string> = {
 };
 
 const TOAST_DISMISS_MS = 4000;
+const CARD_ERROR_DISMISS_MS = 4000;
 const VOLUME_SAVE_DEBOUNCE_MS = 400;
 const GRID_POPOVER_MARGIN = 8;
 const GRID_POPOVER_GAP = 4;
@@ -131,6 +132,7 @@ export default function DashboardPage() {
   const [playPulse, setPlayPulse] = useState<{ id: number; token: number } | null>(null);
   const [toast, setToast] = useState<DashboardToast | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cardErrorTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [favoriteId, setFavoriteId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
@@ -146,7 +148,8 @@ export default function DashboardPage() {
   const [clipToDelete, setClipToDelete] = useState<ClipDto | null>(null);
   const [clipToEditMetadata, setClipToEditMetadata] = useState<ClipDto | null>(null);
   const [metadataTitle, setMetadataTitle] = useState('');
-  const [metadataCategory, setMetadataCategory] = useState('');
+  const [metadataCategories, setMetadataCategories] = useState<string[]>([]);
+  const [metadataCategoryInput, setMetadataCategoryInput] = useState('');
   const [metadataTags, setMetadataTags] = useState<string[]>([]);
   const [metadataTagInput, setMetadataTagInput] = useState('');
   const [metadataCategorySuggestions, setMetadataCategorySuggestions] = useState<string[]>([]);
@@ -186,6 +189,41 @@ export default function DashboardPage() {
       toastTimerRef.current = null;
     }
     setToast(null);
+  }, []);
+
+  const clearCardErrorTimer = useCallback((clipId: number) => {
+    const timer = cardErrorTimersRef.current.get(clipId);
+    if (timer) {
+      clearTimeout(timer);
+      cardErrorTimersRef.current.delete(clipId);
+    }
+  }, []);
+
+  const scheduleCardErrorDismiss = useCallback(
+    (clipId: number, delayMs = CARD_ERROR_DISMISS_MS) => {
+      clearCardErrorTimer(clipId);
+      const timer = window.setTimeout(() => {
+        setCardErrors((prev) => {
+          if (!prev[clipId]) return prev;
+          const next = { ...prev };
+          delete next[clipId];
+          return next;
+        });
+        cardErrorTimersRef.current.delete(clipId);
+      }, delayMs);
+      cardErrorTimersRef.current.set(clipId, timer);
+    },
+    [clearCardErrorTimer],
+  );
+
+  useEffect(() => {
+    const timers = cardErrorTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+      timers.clear();
+    };
   }, []);
 
   const closeClipCardMenus = useCallback(() => {
@@ -348,6 +386,7 @@ export default function DashboardPage() {
         current?.id === id && current.token === token ? null : current,
       );
     }, 337);
+    clearCardErrorTimer(id);
     setCardErrors((prev) => ({ ...prev, [id]: '' }));
     setPlayingId(id);
     try {
@@ -370,6 +409,7 @@ export default function DashboardPage() {
               ? 'No stage browser source — use ?mode=stage in OBS (Layout areas)'
               : 'No audio browser source — add ?mode=audio or universal in OBS',
         }));
+        scheduleCardErrorDismiss(id);
       }
     } catch (err) {
       setCardErrors((prev) => ({
@@ -455,7 +495,14 @@ export default function DashboardPage() {
     setEditFlyoutKey(null);
     setClipToEditMetadata(clip);
     setMetadataTitle(clip.title);
-    setMetadataCategory(clip.category.name ?? '');
+    setMetadataCategories(
+      clip.categories?.length
+        ? clip.categories.map((category) => category.name)
+        : clip.category.name
+          ? [clip.category.name]
+          : [],
+    );
+    setMetadataCategoryInput('');
     setMetadataTags(parseTags(clip.tags ?? ''));
     setMetadataDefaultLayoutAreaId(
       clip.clip_type === 'video' && clip.default_layout_area_id != null
@@ -469,9 +516,8 @@ export default function DashboardPage() {
   const saveMetadata = useCallback(async () => {
     if (!clipToEditMetadata || metadataSaving) return;
     const title = metadataTitle.trim();
-    const category = metadataCategory.trim();
-    if (!title || !category) {
-      setMetadataError('Title and category are required.');
+    if (!title || metadataCategories.length === 0) {
+      setMetadataError('Title and at least one category are required.');
       return;
     }
 
@@ -481,7 +527,7 @@ export default function DashboardPage() {
     try {
       await api.updateClipMetadata(clipToEditMetadata.id, {
         title,
-        category,
+        categories: metadataCategories,
         tags: metadataTags.join(', '),
         ...(clipToEditMetadata.clip_type === 'video'
           ? {
@@ -501,7 +547,7 @@ export default function DashboardPage() {
   }, [
     clipToEditMetadata,
     metadataTitle,
-    metadataCategory,
+    metadataCategories,
     metadataTags,
     metadataDefaultLayoutAreaId,
     metadataSaving,
@@ -536,7 +582,7 @@ export default function DashboardPage() {
     if (!clipToEditMetadata) return;
     let cancelled = false;
     api
-      .getCategorySuggestions(metadataCategory)
+      .getCategorySuggestions(metadataCategoryInput)
       .then((res) => {
         if (!cancelled) {
           setMetadataCategorySuggestions(res.categories.map((category) => category.name));
@@ -548,7 +594,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [clipToEditMetadata, metadataCategory]);
+  }, [clipToEditMetadata, metadataCategoryInput]);
 
   useEffect(() => {
     if (!clipToEditMetadata) return;
@@ -565,6 +611,21 @@ export default function DashboardPage() {
       cancelled = true;
     };
   }, [clipToEditMetadata, metadataTagInput]);
+
+  const addMetadataCategory = (raw: string) => {
+    const name = raw.trim();
+    if (!name) return;
+    setMetadataCategories((current) => {
+      const key = name.toLocaleLowerCase('en');
+      if (current.some((item) => item.toLocaleLowerCase('en') === key)) return current;
+      return [...current, name];
+    });
+    setMetadataCategoryInput('');
+  };
+
+  const removeMetadataCategory = (name: string) => {
+    setMetadataCategories((current) => current.filter((item) => item !== name));
+  };
 
   const addMetadataTag = (raw: string) => {
     const tag = raw.trim();
@@ -789,7 +850,7 @@ export default function DashboardPage() {
               className={
                 gridMode
                   ? 'grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10'
-                  : 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4'
+                  : 'grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12'
               }
             >
               {section.clips.map((clip) => {
@@ -986,8 +1047,8 @@ export default function DashboardPage() {
                 <li
                   key={clip.id}
                   className={
-                    'rounded-md border border-surface/70 bg-bg-soft text-sm ' +
-                    (gridMode ? 'relative aspect-square overflow-hidden' : '')
+                    'relative rounded-md border border-surface/70 bg-bg-soft text-sm ' +
+                    (gridMode ? 'aspect-square overflow-hidden' : '')
                   }
                 >
                   <div className={gridMode ? 'relative h-full w-full' : 'relative'}>
@@ -1010,11 +1071,7 @@ export default function DashboardPage() {
                       }}
                       disabled={favoriteId === clip.id}
                       className={
-                        'absolute left-2 z-20 rounded-full bg-black/45 shadow backdrop-blur ' +
-                        (gridMode
-                          ? 'top-1.5 px-1.5 py-0.5 text-base leading-none'
-                          : 'top-2 px-2 py-1 text-xl leading-none') +
-                        ' ' +
+                        'absolute left-1.5 top-1.5 z-20 rounded-full bg-black/45 px-1.5 py-0.5 text-base leading-none shadow backdrop-blur ' +
                         (clip.is_favorite === 1 ? 'text-yellow-300' : 'text-white')
                       }
                     >
@@ -1041,14 +1098,9 @@ export default function DashboardPage() {
                             pinGridPopoverAnchor(e.currentTarget);
                             setPlayAtFlyoutKey(menuKey);
                           }}
-                          className={
-                            'absolute z-20 rounded-full bg-black/45 text-white shadow backdrop-blur hover:bg-black/60 ' +
-                            (gridMode
-                              ? 'right-9 top-1.5 p-1'
-                              : 'right-10 top-2 p-1.5')
-                          }
+                          className="absolute right-8 top-1.5 z-20 rounded-full bg-black/45 p-1 text-white shadow backdrop-blur hover:bg-black/60"
                         >
-                          <PlayInShortcutIcon className={gridMode ? 'h-3.5 w-3.5' : undefined} />
+                          <PlayInShortcutIcon className="h-3.5 w-3.5" />
                         </button>
                         {playAtFlyoutKey === menuKey && openMenuKey !== menuKey ? (
                           <>
@@ -1089,12 +1141,7 @@ export default function DashboardPage() {
                         setVolumeFlyoutKey(null);
                         setOpenMenuKey(menuKey);
                       }}
-                      className={
-                        'absolute right-2 z-20 rounded-full bg-black/45 text-white shadow backdrop-blur ' +
-                        (gridMode
-                          ? 'top-1.5 px-1.5 py-0.5 text-base leading-none'
-                          : 'top-2 px-2 py-1 text-xl leading-none')
-                      }
+                      className="absolute right-1.5 top-1.5 z-20 rounded-full bg-black/45 px-1.5 py-0.5 text-base leading-none text-white shadow backdrop-blur"
                     >
                       ⋮
                     </button>
@@ -1134,17 +1181,16 @@ export default function DashboardPage() {
                     >
                       <span
                         className={
-                          'relative flex items-center justify-center rounded-full shadow-lg backdrop-blur transition-all duration-300 ' +
-                          (gridMode ? 'h-10 w-10 ' : 'h-16 w-16 ') +
+                          'relative flex h-10 w-10 items-center justify-center rounded-full shadow-lg backdrop-blur transition-all duration-300 ' +
                           (playPulse?.id === clip.id
-                            ? 'scale-125 bg-white/90 text-bg ring-4 ring-white/60'
+                            ? 'scale-125 bg-white/90 text-bg ring-2 ring-white/60'
                             : 'scale-100 bg-black/45 text-white')
                         }
                       >
                         {clip.clip_type === 'video' ? (
-                          <VideoClipIcon className={gridMode ? 'h-4 w-4' : undefined} />
+                          <VideoClipIcon className="h-4 w-4" />
                         ) : (
-                          <AudioClipIcon className={gridMode ? 'h-4 w-4' : undefined} />
+                          <AudioClipIcon className="h-4 w-4" />
                         )}
                       </span>
                     </button>
@@ -1157,24 +1203,24 @@ export default function DashboardPage() {
                           {clip.title}
                         </p>
                         <p className="truncate text-[10px] leading-tight text-white/75">
-                          {clip.category.name ?? '(uncategorized)'}
+                          {formatClipCategories(clip)}
                         </p>
                       </div>
                     ) : null}
                   </div>
                   {!gridMode ? (
-                  <div className="p-3">
+                  <div className="px-2 py-1.5">
                     <p
-                      className="truncate font-medium"
-                      title={clip.clip_type === 'video' ? clip.title : undefined}
+                      className="truncate text-xs font-medium leading-tight"
+                      title={clip.title}
                     >
                       {clip.title}
                     </p>
-                    <p className="truncate text-xs text-text-muted">
-                      {clip.category.name ?? '(uncategorized)'}
+                    <p className="truncate text-[10px] leading-tight text-text-muted">
+                      {formatClipCategories(clip)}
                     </p>
                     {clip.clip_type === 'video' && layoutAreas.length > 0 ? (
-                      <p className="mt-1 truncate text-[10px] text-text-muted">
+                      <p className="mt-0.5 truncate text-[9px] text-text-muted">
                         Play →{' '}
                         {layoutAreaName(
                           resolvePlayLayoutAreaId(clip, layoutSettings, layoutAreas),
@@ -1182,7 +1228,7 @@ export default function DashboardPage() {
                         ) ?? 'default area'}
                       </p>
                     ) : clip.clip_type === 'audio' ? (
-                      <p className="mt-1 truncate text-[10px] text-text-muted">
+                      <p className="mt-0.5 truncate text-[9px] text-text-muted">
                         Play → Audio clip
                       </p>
                     ) : null}
@@ -1193,7 +1239,7 @@ export default function DashboardPage() {
                       className={
                         gridMode
                           ? 'absolute inset-x-0 top-0 z-20 border-b border-red-500/30 bg-red-950/90 px-2 py-1 text-[10px] text-red-200'
-                          : 'border-t border-red-500/30 bg-red-500/10 p-2 text-xs text-red-200'
+                          : 'absolute inset-x-0 top-0 z-20 border-b border-red-500/30 bg-red-950/90 px-1.5 py-0.5 text-[9px] text-red-200'
                       }
                     >
                       {cardErrors[clip.id]}
@@ -1278,7 +1324,7 @@ export default function DashboardPage() {
               Edit metadata
             </h2>
             <p className="mt-1 text-sm text-text-muted">
-              Update title, category, and tags without leaving the Media Board.
+              Update title, categories, and tags without leaving the Media Board.
             </p>
 
             <div className="mt-4 space-y-3">
@@ -1296,23 +1342,60 @@ export default function DashboardPage() {
                 />
               </div>
               <div>
-                <label htmlFor="metadata-category" className="block text-sm font-medium">
-                  Category
+                <label htmlFor="metadata-categories" className="block text-sm font-medium">
+                  Categories
                 </label>
-                <input
-                  id="metadata-category"
-                  list="metadata-category-suggestions"
-                  value={metadataCategory}
-                  onChange={(e) => setMetadataCategory(e.target.value)}
-                  disabled={metadataSaving}
-                  placeholder="Category name"
-                  className="mt-1 w-full rounded-md border border-surface bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
-                />
+                <div className="mt-1 flex gap-2">
+                  <input
+                    id="metadata-categories"
+                    list="metadata-category-suggestions"
+                    value={metadataCategoryInput}
+                    onChange={(e) => setMetadataCategoryInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addMetadataCategory(metadataCategoryInput);
+                      }
+                    }}
+                    disabled={metadataSaving}
+                    placeholder="Type a category"
+                    className="min-w-0 flex-1 rounded-md border border-surface bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addMetadataCategory(metadataCategoryInput)}
+                    disabled={metadataSaving || !metadataCategoryInput.trim()}
+                    className="rounded-md border border-surface px-3 py-2 text-sm font-medium hover:border-accent disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Add
+                  </button>
+                </div>
                 <datalist id="metadata-category-suggestions">
                   {metadataCategorySuggestions.map((name) => (
                     <option key={name} value={name} />
                   ))}
                 </datalist>
+                {metadataCategories.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {metadataCategories.map((name) => (
+                      <span
+                        key={name}
+                        className="inline-flex items-center gap-1 rounded-full border border-surface bg-bg px-2.5 py-1 text-xs"
+                      >
+                        {name}
+                        <button
+                          type="button"
+                          onClick={() => removeMetadataCategory(name)}
+                          disabled={metadataSaving}
+                          aria-label={`Remove category ${name}`}
+                          className="text-text-muted hover:text-text disabled:opacity-40"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               {clipToEditMetadata.clip_type === 'video' && layoutAreas.length > 0 ? (
                 <div>
@@ -1477,6 +1560,15 @@ export default function DashboardPage() {
 
 function isModalSubmitShortcut(event: KeyboardEvent): boolean {
   return event.key === 'Enter' && (event.ctrlKey || event.metaKey);
+}
+
+function formatClipCategories(clip: ClipDto): string {
+  const names = clip.categories?.length
+    ? clip.categories.map((category) => category.name)
+    : clip.category.name
+      ? [clip.category.name]
+      : [];
+  return names.length > 0 ? names.join(', ') : '(uncategorized)';
 }
 
 function parseTags(raw: string): string[] {

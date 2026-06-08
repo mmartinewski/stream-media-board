@@ -2,7 +2,10 @@ import { renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
 import type { Database as BetterDatabase } from 'better-sqlite3';
 import type { AppPaths } from '../config/paths.js';
-import { findOrCreateCategory } from '../db/repositories/categories.js';
+import {
+  resolveCategoriesFromNames,
+  setClipCategories,
+} from '../db/repositories/clipCategories.js';
 import { updateClipDefaultLayoutAreaId } from '../db/repositories/clips.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { cutToMp3, cutToMp4 } from './ffmpeg.js';
@@ -30,7 +33,7 @@ export interface NewClipInput {
   youtubeUrl: string;
   startTime: string;
   endTime: string;
-  categoryName: string;
+  categoryNames: string[];
   tags: string;
   processId: string;
   cropJson: string | undefined;
@@ -93,6 +96,17 @@ function validateTimesAgainstStaging(
 
 function parseClipType(value: string | undefined): ClipType {
   return value === 'video' ? 'video' : 'audio';
+}
+
+function resolveCategoriesOrThrow(
+  db: BetterDatabase,
+  names: string[],
+): ReturnType<typeof resolveCategoriesFromNames> {
+  try {
+    return resolveCategoriesFromNames(db, names);
+  } catch {
+    throw new HttpError(400, 'At least one category is required.', 'missing_category');
+  }
 }
 
 export async function createClipFromUpload(
@@ -158,7 +172,7 @@ export async function createClipFromUpload(
   let clipId = 0;
   try {
     clipId = db.transaction(() => {
-      const cat = findOrCreateCategory(db, input.categoryName);
+      const categories = resolveCategoriesOrThrow(db, input.categoryNames);
       const tagsNorm = input.tags.trim().length ? input.tags.trim() : null;
       const info = db
         .prepare(
@@ -173,7 +187,7 @@ export async function createClipFromUpload(
           input.youtubeUrl.trim(),
           input.startTime.trim(),
           input.endTime.trim(),
-          cat.id,
+          categories[0]?.id ?? null,
           tagsNorm,
           tmpOrig,
           tmpCrop,
@@ -197,6 +211,11 @@ export async function createClipFromUpload(
       db.prepare(
         `UPDATE clips SET thumbnail_original_path = ?, thumbnail_cropped_path = ?, audio_path = ? WHERE id = ?`,
       ).run(finalOrig, finalCrop, finalMp3, id);
+      setClipCategories(
+        db,
+        id,
+        categories.map((category) => category.id),
+      );
       return id;
     })();
   } catch (err) {
@@ -256,7 +275,7 @@ async function createVideoClipFromUpload(
   let clipId = 0;
   try {
     clipId = db.transaction(() => {
-      const cat = findOrCreateCategory(db, input.categoryName);
+      const categories = resolveCategoriesOrThrow(db, input.categoryNames);
       const tagsNorm = input.tags.trim().length ? input.tags.trim() : null;
       const info = db
         .prepare(
@@ -272,7 +291,7 @@ async function createVideoClipFromUpload(
           input.youtubeUrl.trim(),
           input.startTime.trim(),
           input.endTime.trim(),
-          cat.id,
+          categories[0]?.id ?? null,
           tagsNorm,
           tmpOrig,
           tmpCrop,
@@ -299,6 +318,11 @@ async function createVideoClipFromUpload(
       db.prepare(
         `UPDATE clips SET thumbnail_original_path = ?, thumbnail_cropped_path = ?, video_path = ? WHERE id = ?`,
       ).run(finalOrig, finalCrop, finalMp4, id);
+      setClipCategories(
+        db,
+        id,
+        categories.map((category) => category.id),
+      );
       return id;
     })();
   } catch (err) {
@@ -339,7 +363,7 @@ function clampVolume(value: number): number {
 
 export interface UpdateClipMetadataInput {
   title: string;
-  categoryName: string;
+  categoryNames: string[];
   tags: string;
   defaultLayoutAreaId?: number | null;
 }
@@ -361,18 +385,18 @@ export function updateClipMetadata(
     throw new HttpError(400, 'Title is required.', 'missing_title');
   }
 
-  const categoryName = input.categoryName.trim();
-  if (!categoryName) {
-    throw new HttpError(400, 'Category is required.', 'missing_category');
-  }
+  const categories = resolveCategoriesOrThrow(db, input.categoryNames);
 
-  const cat = findOrCreateCategory(db, categoryName);
   const tagsNorm = input.tags.trim().length ? input.tags.trim() : null;
-  db.prepare('UPDATE clips SET title = ?, category_id = ?, tags = ? WHERE id = ?').run(
+  db.prepare('UPDATE clips SET title = ?, tags = ? WHERE id = ?').run(
     title,
-    cat.id,
     tagsNorm,
     clipId,
+  );
+  setClipCategories(
+    db,
+    clipId,
+    categories.map((category) => category.id),
   );
   if (input.defaultLayoutAreaId !== undefined) {
     updateClipDefaultLayoutAreaId(db, clipId, input.defaultLayoutAreaId);
@@ -384,7 +408,7 @@ export interface UpdateClipInput {
   youtubeUrl: string;
   startTime: string;
   endTime: string;
-  categoryName: string;
+  categoryNames: string[];
   tags: string;
   processId: string;
   cropJson: string | undefined;
@@ -529,12 +553,12 @@ export async function updateClipFromUpload(
   }
   cleanupQuiet(pathsExceptExistingTargets([row.audio_path], [finalMp3]));
 
-  const cat = findOrCreateCategory(db, input.categoryName);
+  const categories = resolveCategoriesOrThrow(db, input.categoryNames);
   const tagsNorm = input.tags.trim().length ? input.tags.trim() : null;
   db.prepare(
     `UPDATE clips SET
       title = ?, youtube_url = ?, start_time = ?, end_time = ?,
-      category_id = ?, tags = ?,
+      tags = ?,
       thumbnail_original_path = ?, thumbnail_cropped_path = ?, thumbnail_crop_meta = ?,
       audio_path = ?, volume = ?, audio_normalize = ?, audio_fade = ?, is_favorite = ?
     WHERE id = ?`,
@@ -543,7 +567,6 @@ export async function updateClipFromUpload(
     input.youtubeUrl.trim(),
     input.startTime.trim(),
     input.endTime.trim(),
-    cat.id,
     tagsNorm,
     newOrig,
     newCrop,
@@ -554,6 +577,11 @@ export async function updateClipFromUpload(
     0,
     input.isFavorite ? 1 : 0,
     clipId,
+  );
+  setClipCategories(
+    db,
+    clipId,
+    categories.map((category) => category.id),
   );
 
   deleteStagingBundle(paths.mediaTemp, input.processId);
@@ -666,7 +694,7 @@ async function updateVideoClipFromUpload(
     cleanupQuiet(pathsExceptExistingTargets([row.video_path], [finalMp4]));
   }
 
-  const cat = findOrCreateCategory(db, input.categoryName);
+  const categories = resolveCategoriesOrThrow(db, input.categoryNames);
   const tagsNorm = input.tags.trim().length ? input.tags.trim() : null;
   const defaultLayoutAreaId =
     input.defaultLayoutAreaId !== undefined
@@ -675,7 +703,7 @@ async function updateVideoClipFromUpload(
   db.prepare(
     `UPDATE clips SET
       title = ?, youtube_url = ?, start_time = ?, end_time = ?,
-      category_id = ?, tags = ?,
+      tags = ?,
       thumbnail_original_path = ?, thumbnail_cropped_path = ?, thumbnail_crop_meta = ?,
       video_path = ?, default_layout_area_id = ?, volume = ?, audio_normalize = ?, audio_fade = ?, is_favorite = ?
     WHERE id = ?`,
@@ -684,7 +712,6 @@ async function updateVideoClipFromUpload(
     input.youtubeUrl.trim(),
     input.startTime.trim(),
     input.endTime.trim(),
-    cat.id,
     tagsNorm,
     newOrig,
     newCrop,
@@ -696,6 +723,11 @@ async function updateVideoClipFromUpload(
     0,
     input.isFavorite ? 1 : 0,
     clipId,
+  );
+  setClipCategories(
+    db,
+    clipId,
+    categories.map((category) => category.id),
   );
 
   const metadata = await probeVideoClipMetadata(paths, finalMp4, input.videoOrientation);

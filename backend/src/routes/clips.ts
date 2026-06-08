@@ -6,9 +6,13 @@ import { getDb } from '../db/connection.js';
 import {
   deleteClipById,
   getClipById,
-  getClipWithCategoryById,
-  listClipsWithCategory,
+  listClipsForDashboard,
+  type ClipListRow,
 } from '../db/repositories/clips.js';
+import {
+  getCategoriesForClip,
+  getCategoriesForClips,
+} from '../db/repositories/clipCategories.js';
 import { listCategories } from '../db/repositories/categories.js';
 import { getPlaybackVolume } from '../db/repositories/settings.js';
 import { HttpError } from '../middleware/errorHandler.js';
@@ -39,11 +43,17 @@ interface SectionCategory {
   clips: ClipDto[];
 }
 
+interface CategoryRef {
+  id: number;
+  name: string;
+}
+
 interface ClipDto {
   id: number;
   title: string;
   clip_type: 'audio' | 'video';
   category: { id: number | null; name: string | null };
+  categories: CategoryRef[];
   tags: string;
   thumbnail_cropped_url: string;
   volume: number;
@@ -62,35 +72,21 @@ export function clipsRouter(): Router {
   const listHandler = (req: Request, res: Response) => {
     const db = getDb(paths.databaseFile);
     const search = typeof req.query.search === 'string' ? req.query.search : undefined;
-    const rows = listClipsWithCategory(db, search);
+    const rows = listClipsForDashboard(db, search);
+    const clipIds = [...new Set(rows.map((row) => row.id))];
+    const categoriesByClip = getCategoriesForClips(db, clipIds);
 
     const favorites: ClipDto[] = [];
+    const favoriteIds = new Set<number>();
     const byCategory = new Map<string, SectionCategory>();
 
     for (const row of rows) {
-      const dto: ClipDto = {
-        id: row.id,
-        title: row.title,
-        clip_type: row.clip_type === 'video' ? 'video' : 'audio',
-        category: { id: row.category_id, name: row.category_name },
-        tags: row.tags ?? '',
-        thumbnail_cropped_url: `/api/thumbnails/${row.id}/cropped`,
-        volume: row.volume,
-        audio_normalize: row.audio_normalize,
-        audio_fade: row.audio_fade,
-        is_favorite: row.is_favorite,
-        created_at: row.created_at,
-        video_orientation:
-          row.clip_type === 'video'
-            ? row.video_orientation === 'portrait'
-              ? 'portrait'
-              : 'landscape'
-            : undefined,
-        default_layout_area_id:
-          row.clip_type === 'video' ? row.default_layout_area_id : undefined,
-      };
+      const dto = toClipDto(row, categoriesByClip.get(row.id) ?? []);
 
-      if (row.is_favorite === 1) favorites.push(dto);
+      if (row.is_favorite === 1 && !favoriteIds.has(row.id)) {
+        favoriteIds.add(row.id);
+        favorites.push(dto);
+      }
 
       const key = row.category_name ?? '';
       const existing = byCategory.get(key);
@@ -99,7 +95,10 @@ export function clipsRouter(): Router {
       } else {
         byCategory.set(key, {
           type: 'category',
-          category: { id: row.category_id, name: row.category_name ?? '(uncategorized)' },
+          category: {
+            id: row.section_category_id,
+            name: row.category_name ?? '(uncategorized)',
+          },
           clips: [dto],
         });
       }
@@ -180,7 +179,7 @@ export function clipsRouter(): Router {
           const startTime = field(body, 'start_time');
           const endTime = field(body, 'end_time');
           const title = field(body, 'title');
-          const category = field(body, 'category');
+          const categoryNames = parseCategoryNames(body);
           const tags = field(body, 'tags');
           const processId = field(body, 'process_id');
           const cropJson = field(body, 'thumbnail_crop_meta') || undefined;
@@ -195,8 +194,8 @@ export function clipsRouter(): Router {
           if (!title) {
             throw new HttpError(400, 'Title is required.', 'missing_title');
           }
-          if (!category) {
-            throw new HttpError(400, 'Category is required.', 'missing_category');
+          if (categoryNames.length === 0) {
+            throw new HttpError(400, 'At least one category is required.', 'missing_category');
           }
           if (!isValidProcessId(processId)) {
             throw new HttpError(400, 'Invalid process_id.', 'invalid_process_id');
@@ -210,7 +209,7 @@ export function clipsRouter(): Router {
             youtubeUrl,
             startTime,
             endTime,
-            categoryName: category,
+            categoryNames,
             tags,
             processId,
             cropJson,
@@ -297,10 +296,11 @@ export function clipsRouter(): Router {
     try {
       const id = parseClipId(req.params.id);
       const db = getDb(paths.databaseFile);
-      const row = getClipWithCategoryById(db, id);
+      const row = getClipById(db, id);
       if (!row) {
         throw new HttpError(404, 'Clip not found.', 'clip_not_found');
       }
+      const categories = getCategoriesForClip(db, id);
       res.json({
         id: row.id,
         title: row.title,
@@ -308,7 +308,8 @@ export function clipsRouter(): Router {
         youtube_url: row.youtube_url,
         start_time: row.start_time,
         end_time: row.end_time,
-        category: { id: row.category_id, name: row.category_name },
+        categories,
+        category: categories[0] ?? { id: null, name: null },
         tags: row.tags ?? '',
         thumbnail_crop_meta: row.thumbnail_crop_meta,
         thumbnail_original_url: `/api/thumbnails/${row.id}/original`,
@@ -342,7 +343,7 @@ export function clipsRouter(): Router {
           const startTime = field(body, 'start_time');
           const endTime = field(body, 'end_time');
           const title = field(body, 'title');
-          const category = field(body, 'category');
+          const categoryNames = parseCategoryNames(body);
           const tags = field(body, 'tags');
           const processId = field(body, 'process_id');
           const cropJson = field(body, 'thumbnail_crop_meta') || undefined;
@@ -358,8 +359,8 @@ export function clipsRouter(): Router {
           if (!title) {
             throw new HttpError(400, 'Title is required.', 'missing_title');
           }
-          if (!category) {
-            throw new HttpError(400, 'Category is required.', 'missing_category');
+          if (categoryNames.length === 0) {
+            throw new HttpError(400, 'At least one category is required.', 'missing_category');
           }
           if (!isValidProcessId(processId)) {
             throw new HttpError(400, 'Invalid process_id.', 'invalid_process_id');
@@ -373,7 +374,7 @@ export function clipsRouter(): Router {
             youtubeUrl,
             startTime,
             endTime,
-            categoryName: category,
+            categoryNames,
             tags,
             processId,
             cropJson,
@@ -406,15 +407,16 @@ export function clipsRouter(): Router {
       const body = (req.body ?? {}) as {
         title?: unknown;
         category?: unknown;
+        categories?: unknown;
         tags?: unknown;
         default_layout_area_id?: unknown;
       };
       const title = typeof body.title === 'string' ? body.title.trim() : '';
-      const category = typeof body.category === 'string' ? body.category.trim() : '';
+      const categoryNames = parseCategoryNamesFromJson(body);
       const tags = typeof body.tags === 'string' ? body.tags : '';
       const metadataInput: Parameters<typeof updateClipMetadata>[2] = {
         title,
-        categoryName: category,
+        categoryNames,
         tags,
       };
       if (row.clip_type === 'video' && 'default_layout_area_id' in body) {
@@ -529,6 +531,62 @@ export function clipsRouter(): Router {
   });
 
   return router;
+}
+
+function toClipDto(
+  row: ClipListRow,
+  categories: CategoryRef[],
+): ClipDto {
+  return {
+    id: row.id,
+    title: row.title,
+    clip_type: row.clip_type === 'video' ? 'video' : 'audio',
+    category: { id: row.section_category_id, name: row.category_name },
+    categories,
+    tags: row.tags ?? '',
+    thumbnail_cropped_url: `/api/thumbnails/${row.id}/cropped`,
+    volume: row.volume,
+    audio_normalize: row.audio_normalize,
+    audio_fade: row.audio_fade,
+    is_favorite: row.is_favorite,
+    created_at: row.created_at,
+    video_orientation:
+      row.clip_type === 'video'
+        ? row.video_orientation === 'portrait'
+          ? 'portrait'
+          : 'landscape'
+        : undefined,
+    default_layout_area_id:
+      row.clip_type === 'video' ? row.default_layout_area_id : undefined,
+  };
+}
+
+function parseCategoryNames(body: Record<string, unknown>): string[] {
+  const categoriesRaw = field(body, 'categories');
+  if (categoriesRaw) {
+    return parseTags(categoriesRaw);
+  }
+  const single = field(body, 'category');
+  return single ? [single] : [];
+}
+
+function parseCategoryNamesFromJson(body: {
+  category?: unknown;
+  categories?: unknown;
+}): string[] {
+  if (Array.isArray(body.categories)) {
+    return body.categories
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+  if (typeof body.categories === 'string') {
+    return parseTags(body.categories);
+  }
+  if (typeof body.category === 'string' && body.category.trim()) {
+    return [body.category.trim()];
+  }
+  return [];
 }
 
 function field(body: Record<string, unknown>, key: string): string {
