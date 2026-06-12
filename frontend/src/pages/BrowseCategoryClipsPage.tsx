@@ -6,12 +6,17 @@ import { useBrowseView } from '../contexts/BrowseViewContext';
 import SwipeBackShell from '../components/SwipeBackShell';
 import { updateClipVolumeInList, useClipCards } from '../hooks/useClipCards';
 import { api, type ClipDto } from '../lib/api';
+import {
+  fetchGlobalSearchClips,
+  isInCategorySearch,
+} from '../lib/browseSearchScope';
 
 export default function BrowseCategoryClipsPage() {
   const { pathname } = useLocation();
   const { categoryId: categoryIdParam } = useParams();
   const [searchParams] = useSearchParams();
   const search = searchParams.get('search') ?? '';
+  const searchInCategoryOnly = isInCategorySearch(searchParams);
   const { gridMode } = useBrowseView();
 
   const isFavorites = pathname === '/browse/favorites';
@@ -25,15 +30,19 @@ export default function BrowseCategoryClipsPage() {
   const [loading, setLoading] = useState(true);
 
   const reloadClips = useCallback(async () => {
+    const query = search.trim();
+    if (query && !searchInCategoryOnly) {
+      return fetchGlobalSearchClips(query);
+    }
     if (isFavorites) {
-      const res = await api.getClips(search.trim() || undefined);
+      const res = await api.getClips(query || undefined);
       const favoritesSection = res.sections.find((section) => section.type === 'favorites');
       return favoritesSection?.clips ?? [];
     }
     if (categoryId == null) return [];
-    const res = await api.getCategoryClips(categoryId, search.trim() || undefined);
+    const res = await api.getCategoryClips(categoryId, query || undefined);
     return res.clips;
-  }, [categoryId, isFavorites, search]);
+  }, [categoryId, isFavorites, search, searchInCategoryOnly]);
 
   const refreshClips = useCallback(async () => {
     const next = await reloadClips();
@@ -101,7 +110,15 @@ export default function BrowseCategoryClipsPage() {
           <p className="text-text-muted">Loading clips...</p>
         ) : clips.length === 0 ? (
           <p className="text-text-muted">
-            {search.trim() ? 'No clips match this search.' : 'No clips in this category.'}
+            {search.trim()
+              ? searchInCategoryOnly
+                ? isFavorites
+                  ? 'No favorites match this search.'
+                  : 'No clips in this category match this search.'
+                : 'No clips match this search.'
+              : isFavorites
+                ? 'No favorite clips yet.'
+                : 'No clips in this category.'}
           </p>
         ) : (
           <ul

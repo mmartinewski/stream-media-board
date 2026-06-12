@@ -10,6 +10,7 @@ import {
 import { api, type CategorySummary } from '../lib/api';
 import { APP_SHELL_H_PADDING } from '../lib/appShellLayout';
 import { getBrowserOverlayUrl } from '../lib/overlay';
+import { IN_CATEGORY_SEARCH_PARAM, isInCategorySearch } from '../lib/browseSearchScope';
 
 type ToolbarToastVariant = 'error' | 'success';
 
@@ -36,6 +37,7 @@ export default function MediaToolbar() {
   const isCategoryFocus = isFavorites || categoryId != null;
 
   const search = searchParams.get('search') ?? '';
+  const searchInCategoryOnly = isInCategorySearch(searchParams);
   const { gridMode: dashboardGridMode, setGridModePersisted: setDashboardGridMode } =
     useDashboardView();
   const { gridMode: browseGridMode, setGridModePersisted: setBrowseGridMode } = useBrowseView();
@@ -77,6 +79,21 @@ export default function MediaToolbar() {
           const next = new URLSearchParams(prev);
           if (value) next.set('search', value);
           else next.delete('search');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const updateSearchInCategoryOnly = useCallback(
+    (checked: boolean) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (checked) next.delete(IN_CATEGORY_SEARCH_PARAM);
+          else next.set(IN_CATEGORY_SEARCH_PARAM, '0');
           return next;
         },
         { replace: true },
@@ -174,9 +191,11 @@ export default function MediaToolbar() {
   };
 
   const searchPlaceholder = isCategoryFocus
-    ? isFavorites
-      ? 'Search favorites'
-      : 'Search in category'
+    ? searchInCategoryOnly
+      ? isFavorites
+        ? 'Search favorites'
+        : 'Search in category'
+      : 'Search all clips'
     : 'Search clips';
 
   const chipSearchSuffix = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
@@ -301,6 +320,24 @@ export default function MediaToolbar() {
             </Link>
           ) : null}
         </div>
+
+        {isCategoryFocus ? (
+          <div
+            className={
+              'flex items-center border-t border-surface/30 py-1.5 ' + APP_SHELL_H_PADDING
+            }
+          >
+            <label className="flex cursor-pointer select-none items-center gap-2 text-xs text-text-muted">
+              <input
+                type="checkbox"
+                checked={searchInCategoryOnly}
+                onChange={(e) => updateSearchInCategoryOnly(e.target.checked)}
+                className="accent-accent"
+              />
+              {isFavorites ? 'Limit search to favorites' : 'Limit search to this category'}
+            </label>
+          </div>
+        ) : null}
 
         {controlsOpen ? (
           <div className={'space-y-3 border-t border-surface/50 pb-2 pt-2 ' + APP_SHELL_H_PADDING}>
