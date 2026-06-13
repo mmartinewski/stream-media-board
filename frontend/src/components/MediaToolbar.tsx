@@ -11,6 +11,7 @@ import { api, type CategorySummary } from '../lib/api';
 import { APP_SHELL_H_PADDING } from '../lib/appShellLayout';
 import { getBrowserOverlayUrl } from '../lib/overlay';
 import { IN_CATEGORY_SEARCH_PARAM, isInCategorySearch } from '../lib/browseSearchScope';
+import { writeBrowseSearchInCategoryOnly } from '../lib/browsePreferences';
 
 type ToolbarToastVariant = 'error' | 'success';
 
@@ -35,15 +36,16 @@ export default function MediaToolbar() {
   const isFavorites = pathname === '/browse/favorites';
   const categoryId = parseCategoryId(pathname);
   const isCategoryFocus = isFavorites || categoryId != null;
+  const isBrowseView = isCategoryGrid || isCategoryFocus;
 
   const search = searchParams.get('search') ?? '';
   const searchInCategoryOnly = isInCategorySearch(searchParams);
   const { gridMode: dashboardGridMode, setGridModePersisted: setDashboardGridMode } =
     useDashboardView();
   const { gridMode: browseGridMode, setGridModePersisted: setBrowseGridMode } = useBrowseView();
-  const gridMode = isCategoryFocus ? browseGridMode : dashboardGridMode;
+  const gridMode = isBrowseView ? browseGridMode : dashboardGridMode;
   const toggleGridMode = () => {
-    if (isCategoryFocus) {
+    if (isBrowseView) {
       setBrowseGridMode((current) => !current);
     } else {
       setDashboardGridMode((current) => !current);
@@ -89,6 +91,7 @@ export default function MediaToolbar() {
 
   const updateSearchInCategoryOnly = useCallback(
     (checked: boolean) => {
+      writeBrowseSearchInCategoryOnly(checked);
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -190,15 +193,25 @@ export default function MediaToolbar() {
     }
   };
 
-  const searchPlaceholder = isCategoryFocus
+  const searchPlaceholder = isCategoryGrid
     ? searchInCategoryOnly
-      ? isFavorites
-        ? 'Search favorites'
-        : 'Search in category'
+      ? 'Search categories'
       : 'Search all clips'
-    : 'Search clips';
+    : isCategoryFocus
+      ? searchInCategoryOnly
+        ? isFavorites
+          ? 'Search favorites'
+          : 'Search in category'
+        : 'Search all clips'
+      : 'Search clips';
 
-  const chipSearchSuffix = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  const chipSearchSuffix = (() => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set('search', search.trim());
+    if (!searchInCategoryOnly) params.set(IN_CATEGORY_SEARCH_PARAM, '0');
+    const serialized = params.toString();
+    return serialized ? `?${serialized}` : '';
+  })();
 
   return (
     <>
@@ -321,7 +334,7 @@ export default function MediaToolbar() {
           ) : null}
         </div>
 
-        {isCategoryFocus ? (
+        {isBrowseView ? (
           <div
             className={
               'flex items-center border-t border-surface/30 py-1.5 ' + APP_SHELL_H_PADDING
@@ -334,7 +347,11 @@ export default function MediaToolbar() {
                 onChange={(e) => updateSearchInCategoryOnly(e.target.checked)}
                 className="accent-accent"
               />
-              {isFavorites ? 'Limit search to favorites' : 'Limit search to this category'}
+              {isCategoryGrid
+                ? 'Limit search to categories'
+                : isFavorites
+                  ? 'Limit search to favorites'
+                  : 'Limit search to this category'}
             </label>
           </div>
         ) : null}
