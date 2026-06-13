@@ -6,6 +6,7 @@ import ClipFormPage from './pages/ClipFormPage';
 import LayoutAreasPage from './pages/LayoutAreasPage';
 import ChecklistsListPage from './pages/ChecklistsListPage';
 import ChecklistEditorPage from './pages/ChecklistEditorPage';
+import GifsPage from './pages/GifsPage';
 import BrowseCategoriesPage from './pages/BrowseCategoriesPage';
 import BrowseCategoryClipsPage from './pages/BrowseCategoryClipsPage';
 
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/browse/favorites" element={<BrowseCategoryClipsPage />} />
         <Route path="/browse/categories/:categoryId" element={<BrowseCategoryClipsPage />} />
         <Route path="/checklists" element={<ChecklistsListPage />} />
+        <Route path="/gifs" element={<GifsPage />} />
         <Route path="/checklists/:id" element={<ChecklistEditorPage mode="edit" />} />
         <Route path="/clips/new" element={<ClipFormPage mode="create" />} />
         <Route path="/clips/:id/edit" element={<ClipFormPage mode="edit" />} />

@@ -8,6 +8,61 @@ export interface SettingsResponse {
   playback_volume: number;
 }
 
+export type GiphyContentRating = 'g' | 'pg' | 'pg-13' | 'r';
+
+export interface GiphyIntegrationSettings {
+  giphy_api_key_configured: boolean;
+  enabled: boolean;
+  static_display_seconds: number;
+  minimum_display_seconds: number;
+  rating: GiphyContentRating;
+  customer_id: string | null;
+}
+
+export interface MediaSearchAnalyticsUrls {
+  onload: string;
+  onclick: string;
+  onsent: string;
+}
+
+export interface MediaSearchResult {
+  provider: 'giphy';
+  externalId: string;
+  title: string;
+  previewUrl: string;
+  playUrl: string;
+  width: number;
+  height: number;
+  isAnimated: boolean;
+  tags?: string[];
+  analytics?: MediaSearchAnalyticsUrls;
+  cached?: boolean;
+}
+
+export interface MediaSearchResponse {
+  results: MediaSearchResult[];
+  pagination: { offset: number; count: number; totalCount: number };
+}
+
+export interface MediaSearchPlayResponse {
+  status: string;
+  playback: 'browser_source';
+  connected_clients?: number;
+  provider: 'giphy';
+  external_id: string;
+  is_animated: boolean;
+  cached?: boolean;
+}
+
+export interface MediaSearchCacheMetadata {
+  provider: 'giphy';
+  external_id: string;
+  title: string | null;
+  provider_tags: string[];
+  user_tags: string[];
+  cached: boolean;
+}
+
 export type ClipType = 'audio' | 'video';
 
 export interface CategoryRef {
@@ -208,6 +263,67 @@ export const api = {
     }),
   getYoutubeSession: () => request<YoutubeSessionResponse>('/api/youtube/session'),
   getSettings: () => request<SettingsResponse>('/api/settings'),
+  getGiphyIntegration: () => request<GiphyIntegrationSettings>('/api/integrations/giphy'),
+  updateGiphyIntegration: (body: {
+    api_key?: string;
+    enabled?: boolean;
+    static_display_seconds?: number;
+    minimum_display_seconds?: number;
+    rating?: GiphyContentRating;
+    remove_api_key?: boolean;
+  }) =>
+    request<GiphyIntegrationSettings>('/api/integrations/giphy', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  searchMedia: (params: { q?: string; offset?: number; limit?: number; local?: boolean }) => {
+    const search = new URLSearchParams();
+    if (params.q) search.set('q', params.q);
+    if (params.offset != null) search.set('offset', String(params.offset));
+    if (params.limit != null) search.set('limit', String(params.limit));
+    if (params.local) search.set('local', '1');
+    const query = search.toString();
+    return request<MediaSearchResponse>(`/api/media-search${query ? `?${query}` : ''}`);
+  },
+  playMediaSearch: (body: {
+    provider: 'giphy';
+    external_id: string;
+    layout_area_id?: number;
+  }) =>
+    request<MediaSearchPlayResponse>('/api/media-search/play', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  cacheMediaSearch: (body: { provider: 'giphy'; external_id: string }) =>
+    request<{ ok: true; cached: boolean; result: MediaSearchResult }>('/api/media-search/cache', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  getMediaSearchCache: (provider: 'giphy', externalId: string) =>
+    request<MediaSearchCacheMetadata>(
+      `/api/media-search/cache/${encodeURIComponent(provider)}/${encodeURIComponent(externalId)}`,
+    ),
+  updateMediaSearchCacheTags: (provider: 'giphy', externalId: string, tags: string[]) =>
+    request<{
+      ok: true;
+      provider: 'giphy';
+      external_id: string;
+      provider_tags: string[];
+      user_tags: string[];
+    }>(`/api/media-search/cache/${encodeURIComponent(provider)}/${encodeURIComponent(externalId)}/tags`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags }),
+    }),
+  sendMediaSearchAnalytics: (url: string) =>
+    request<{ ok: true }>('/api/media-search/analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    }),
   setVolume: (playback_volume: number) =>
     request<SettingsResponse>('/api/settings', {
       method: 'PUT',

@@ -15,6 +15,8 @@ import { categoryThumbnailsRouter } from './routes/categoryThumbnails.js';
 import { layoutAreasRouter } from './routes/layoutAreas.js';
 import { todoListsRouter } from './routes/todoLists.js';
 import { browserSourceRouter } from './routes/browserSource.js';
+import { integrationsRouter } from './routes/integrations.js';
+import { mediaSearchRouter } from './routes/mediaSearch.js';
 import { logger } from './lib/logger.js';
 import type { AppPaths } from './config/paths.js';
 
@@ -37,6 +39,8 @@ export function createApp(paths: AppPaths): Express {
   app.use('/api/browser-source', browserSourceRouter(paths));
   app.use('/api/layout-areas', layoutAreasRouter());
   app.use('/api/todo-lists', todoListsRouter());
+  app.use('/api/integrations', integrationsRouter());
+  app.use('/api/media-search', mediaSearchRouter());
 
   if (existsSync(paths.frontendDist)) {
     app.use(express.static(paths.frontendDist));

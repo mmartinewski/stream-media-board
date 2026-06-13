@@ -53,7 +53,7 @@ export function parseBrowserSourceMode(value: unknown): BrowserSourceMode {
 export function browserSourceModeAcceptsClip(
   mode: BrowserSourceMode,
   clipOrientation: VideoOrientation | null | undefined,
-  mediaKind?: 'audio' | 'video',
+  mediaKind?: 'audio' | 'video' | 'image',
 ): boolean {
   if (mediaKind === 'audio') {
     return mode === 'audio' || mode === 'universal' || mode === 'stage';

@@ -12,13 +12,15 @@ import type { TodoListOverlayDto } from './todoListTypes.js';
 export interface BrowserSourcePlayEvent {
   type: 'play';
   mediaUrl: string;
-  mediaKind?: 'audio' | 'video';
+  mediaKind?: 'audio' | 'video' | 'image';
   volume?: number;
   playbackVolume?: number;
   width?: number;
   height?: number;
   orientation?: VideoOrientation;
   layoutArea?: LayoutAreaDto;
+  displayDurationSec?: number;
+  minimumDisplaySec?: number;
 }
 
 export interface BrowserSourceStopEvent {

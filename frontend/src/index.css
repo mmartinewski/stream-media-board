@@ -91,12 +91,25 @@ body.browser-source-root #root {
 .browser-source-media.is-visible {
   opacity: 1;
   visibility: visible;
+  pointer-events: none;
   transition:
     opacity var(--browser-source-fade-duration) ease-in-out,
     visibility 0s linear 0s;
 }
 
-.browser-source-video {
+.browser-source-media.is-waapi-fade-in,
+.browser-source-media.is-fade-commit {
+  transition: none;
+}
+
+.browser-source-media-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.browser-source-video,
+.browser-source-image {
   display: block;
   width: 100%;
   height: 100%;
@@ -112,6 +125,17 @@ body.browser-source-root #root {
 
 .browser-source-video-slot {
   pointer-events: none;
+  overflow: hidden;
+}
+
+.browser-source-mode-stage .browser-source-video:not(.is-revealed),
+.browser-source-mode-stage .browser-source-image:not(.is-revealed) {
+  visibility: hidden;
+}
+
+.browser-source-mode-stage .browser-source-video.is-revealed,
+.browser-source-mode-stage .browser-source-image.is-revealed {
+  visibility: visible;
 }
 
 .browser-source-audio {

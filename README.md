@@ -85,6 +85,8 @@ Step-by-step notes, troubleshooting (black background), and audio vs video behav
 
 **Layout Stage:** single-source layout areas and in-app positioning — **[docs/overlay-layout-stage.md](docs/overlay-layout-stage.md)**.
 
+**GIPHY media search:** search and play GIFs on the stage overlay from **GIFs** in the app — **[docs/giphy-media-search.md](docs/giphy-media-search.md)** (API key setup, offline cache, tags).
+
 Release checklist: [docs/next-release.md](docs/next-release.md).
 
 ## Development

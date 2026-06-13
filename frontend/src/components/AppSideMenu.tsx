@@ -20,6 +20,12 @@ const NAV_ITEMS: ReadonlyArray<{
     icon: <ChecklistsIcon className={NAV_ICON_CLASS} />,
   },
   {
+    to: '/gifs',
+    label: 'GIFs',
+    end: false,
+    icon: <GifsIcon className={NAV_ICON_CLASS} />,
+  },
+  {
     to: '/settings/layout-areas',
     label: 'Layout areas',
     end: false,
@@ -146,6 +152,24 @@ function ChecklistsIcon({ className }: { className?: string }) {
       <path d="M10 6.5h7" />
       <rect x="3" y="11" width="5" height="5" rx="1" />
       <path d="M10 13.5h7" />
+    </svg>
+  );
+}
+
+function GifsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    >
+      <rect x="3" y="5" width="14" height="10" rx="1.5" />
+      <path d="M7 9h2M11 9h2M7 12h6" />
     </svg>
   );
 }
