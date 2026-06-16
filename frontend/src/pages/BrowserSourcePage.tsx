@@ -8,7 +8,13 @@ import { computeVideoSlotLayout, type LayoutAreaDto, type VideoSlotLayout } from
 import { waitForVideoElementReady } from '../lib/mediaPreload';
 import { runBrowserSourceFadeIn, waitForNextPaint, handoffBrowserSourceFadeInToCssVisible, releaseBrowserSourceFadeInHandoff } from '../lib/browserSourceFadeIn';
 import TodoOverlayLayer from '../components/TodoOverlayLayer';
-import type { TodoListOverlayDto } from '../lib/todoOverlay';
+import {
+  mergeItemHighlights,
+  resolveItemHighlights,
+  type TodoItemHighlight,
+  type TodoItemHighlightMode,
+  type TodoListOverlayDto,
+} from '../lib/todoOverlay';
 
 interface BrowserSourcePlayEvent {
   type: 'play';
@@ -31,6 +37,8 @@ interface BrowserSourceStopEvent {
 interface BrowserSourceTodoShowEvent {
   type: 'todo_show';
   list: TodoListOverlayDto;
+  highlight_item_id?: number;
+  highlight_item_mode?: TodoItemHighlightMode;
 }
 
 interface BrowserSourceTodoHideEvent {
@@ -40,6 +48,8 @@ interface BrowserSourceTodoHideEvent {
 interface BrowserSourceTodoSyncEvent {
   type: 'todo_sync';
   list: TodoListOverlayDto;
+  highlight_item_id?: number;
+  highlight_item_mode?: TodoItemHighlightMode;
 }
 
 type BrowserSourceSseEvent =
@@ -193,15 +203,18 @@ export default function BrowserSourcePage() {
   const [visible, setVisible] = useState(false);
   const [slotFrameReady, setSlotFrameReady] = useState(false);
   const [showingImage, setShowingImage] = useState(false);
-  const [status, setStatus] = useState('connecting');
   const [videoSlotLayout, setVideoSlotLayout] = useState<VideoSlotLayout | null>(null);
   const [slotMediaUrl, setSlotMediaUrl] = useState<string | null>(null);
   const [todoList, setTodoList] = useState<TodoListOverlayDto | null>(null);
   const [todoEnterList, setTodoEnterList] = useState<TodoListOverlayDto | null>(null);
   const [todoPhase, setTodoPhase] = useState<TodoPhase>('hidden');
+  const [highlightedItems, setHighlightedItems] = useState<Map<number, TodoItemHighlightMode>>(
+    () => new Map(),
+  );
   const todoListRef = useRef<TodoListOverlayDto | null>(null);
   const todoPhaseRef = useRef<TodoPhase>('hidden');
   const pendingTodoListRef = useRef<TodoListOverlayDto | null>(null);
+  const pendingHighlightItemsRef = useRef<TodoItemHighlight[]>([]);
   const fadeOutFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const imageEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeOutStartedRef = useRef(false);
@@ -316,36 +329,99 @@ export default function BrowserSourcePage() {
     setSlotMediaUrl(null);
   }, [cancelFadeIn, clearAudio, clearFadeOutFallback, clearImage, clearImageEndTimer, clearVideo, detachEndWatch]);
 
-  const showTodoList = useCallback((list: TodoListOverlayDto) => {
-    const current = todoListRef.current;
-    const phase = todoPhaseRef.current;
-
-    if (
-      current?.id === list.id &&
-      (phase === 'visible' || phase === 'entering')
-    ) {
-      setTodoList(list);
-      return;
-    }
-
-    if (!current || phase === 'hidden') {
-      pendingTodoListRef.current = null;
-      setTodoEnterList(null);
-      setTodoList(list);
-      setTodoPhase('entering');
-      return;
-    }
-
-    pendingTodoListRef.current = list;
-    if (phase !== 'exiting') {
-      setTodoPhase('exiting');
-    }
+  const addHighlightedItems = useCallback((highlights: TodoItemHighlight[]) => {
+    if (highlights.length === 0) return;
+    setHighlightedItems((prev) => {
+      const next = new Map(prev);
+      for (const { itemId, mode } of highlights) next.set(itemId, mode);
+      return next;
+    });
   }, []);
+
+  const handleHighlightAnimationEnd = useCallback((itemId: number) => {
+    setHighlightedItems((prev) => {
+      if (!prev.has(itemId)) return prev;
+      const next = new Map(prev);
+      next.delete(itemId);
+      return next;
+    });
+  }, []);
+
+  const queueHighlights = useCallback(
+    (highlights: TodoItemHighlight[], deferUntilVisible: boolean) => {
+      if (highlights.length === 0) return;
+      if (deferUntilVisible) {
+        pendingHighlightItemsRef.current = mergeItemHighlights(
+          pendingHighlightItemsRef.current,
+          highlights,
+        );
+        return;
+      }
+      addHighlightedItems(highlights);
+    },
+    [addHighlightedItems],
+  );
+
+  const resolveEventHighlight = useCallback(
+    (
+      previous: TodoListOverlayDto | null,
+      next: TodoListOverlayDto,
+      highlightItemId?: number,
+      highlightItemMode?: TodoItemHighlightMode,
+    ): TodoItemHighlight[] => {
+      const explicit =
+        highlightItemId != null && highlightItemMode != null
+          ? { itemId: highlightItemId, mode: highlightItemMode }
+          : undefined;
+      return resolveItemHighlights(previous, next, explicit);
+    },
+    [],
+  );
+
+  const showTodoList = useCallback(
+    (list: TodoListOverlayDto, highlightItemId?: number, highlightItemMode?: TodoItemHighlightMode) => {
+      const current = todoListRef.current;
+      const phase = todoPhaseRef.current;
+      const highlights = resolveEventHighlight(
+        current,
+        list,
+        highlightItemId,
+        highlightItemMode,
+      );
+
+      if (
+        current?.id === list.id &&
+        (phase === 'visible' || phase === 'entering')
+      ) {
+        queueHighlights(highlights, phase === 'entering');
+        setTodoList(list);
+        return;
+      }
+
+      pendingHighlightItemsRef.current = highlights;
+
+      if (!current || phase === 'hidden') {
+        pendingTodoListRef.current = null;
+        setTodoEnterList(null);
+        setTodoList(list);
+        setTodoPhase('entering');
+        return;
+      }
+
+      pendingTodoListRef.current = list;
+      if (phase !== 'exiting') {
+        setTodoPhase('exiting');
+      }
+    },
+    [queueHighlights, resolveEventHighlight],
+  );
 
   const completeTodoEnter = useCallback(() => {
+    addHighlightedItems(pendingHighlightItemsRef.current);
+    pendingHighlightItemsRef.current = [];
     setTodoPhase('visible');
     setTodoEnterList(null);
-  }, []);
+  }, [addHighlightedItems]);
 
   const hideTodoComplete = useCallback(() => {
     const pending = pendingTodoListRef.current;
@@ -369,7 +445,9 @@ export default function BrowserSourcePage() {
 
   const startTodoHide = useCallback(() => {
     pendingTodoListRef.current = null;
+    pendingHighlightItemsRef.current = [];
     setTodoEnterList(null);
+    setHighlightedItems(new Map());
     setTodoPhase((current) => (current === 'hidden' ? current : 'exiting'));
   }, []);
 
@@ -615,10 +693,6 @@ export default function BrowserSourcePage() {
   useEffect(() => {
     const source = new EventSource(getBrowserSourceEventsUrl(mode));
 
-    source.onopen = () => {
-      setStatus(`connected (${mode})`);
-    };
-
     source.onmessage = (message) => {
       let event: BrowserSourceSseEvent;
       try {
@@ -633,7 +707,7 @@ export default function BrowserSourcePage() {
       }
 
       if (event.type === 'todo_show') {
-        showTodoList(event.list);
+        showTodoList(event.list, event.highlight_item_id, event.highlight_item_mode);
         return;
       }
 
@@ -643,8 +717,18 @@ export default function BrowserSourcePage() {
       }
 
       if (event.type === 'todo_sync') {
+        const prev = todoListRef.current;
+        const phase = todoPhaseRef.current;
+        queueHighlights(
+          resolveEventHighlight(
+            prev,
+            event.list,
+            event.highlight_item_id,
+            event.highlight_item_mode,
+          ),
+          phase === 'entering',
+        );
         setTodoList(event.list);
-        setTodoPhase((current) => (current === 'hidden' ? 'visible' : current));
         return;
       }
 
@@ -663,15 +747,11 @@ export default function BrowserSourcePage() {
       void playVideoClip(event);
     };
 
-    source.onerror = () => {
-      setStatus(`reconnecting (${mode})`);
-    };
-
     return () => {
       source.close();
       detachEndWatch();
     };
-  }, [mode, playAudioClip, playImageClip, playVideoClip, showTodoList, startTodoHide, stopAllPlayback, detachEndWatch]);
+  }, [mode, playAudioClip, playImageClip, playVideoClip, showTodoList, startTodoHide, stopAllPlayback, detachEndWatch, queueHighlights, resolveEventHighlight]);
 
   const handleVideoEnded = () => {
     if (fadeOutStartedRef.current || useMinDisplayTimerRef.current) return;
@@ -753,12 +833,9 @@ export default function BrowserSourcePage() {
         phase={todoPhase}
         onEnterComplete={completeTodoEnter}
         onExitComplete={hideTodoComplete}
+        highlightedItems={highlightedItems}
+        onHighlightAnimationEnd={handleHighlightAnimationEnd}
       />
-      {import.meta.env.DEV ? (
-        <p className="browser-source-debug" aria-hidden="true">
-          {status}
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -98,6 +98,9 @@ export interface TodoListDetailDto {
   panel_inset_y_percent: number;
   item_zebra_opacity_percent: number;
   background_opacity_percent: number;
+  background_blur_px?: number;
+  max_display_seconds: number | null;
+  auto_show_on_item_update: boolean;
   columns: TodoColumnDto[];
 }
 
@@ -134,6 +137,8 @@ export interface TodoListInput {
   background_opacity_percent?: number;
   background_mode?: TodoBackgroundMode;
   background_color?: string;
+  max_display_seconds?: number | null;
+  auto_show_on_item_update?: boolean;
 }
 
 export interface TodoListOverlayState {
@@ -227,6 +232,67 @@ export function todoColumnsStyle(columnCount: number): CSSProperties {
 
 export function isTodoItemCompleted(completed: boolean | number | undefined | null): boolean {
   return completed === true || completed === 1;
+}
+
+export type TodoItemHighlightMode = 'check' | 'uncheck';
+
+/** Keep in sync with todo-item highlight animations in index.css */
+export const TODO_ITEM_HIGHLIGHT_MS = 1250;
+
+export interface TodoItemHighlight {
+  itemId: number;
+  mode: TodoItemHighlightMode;
+}
+
+export function findToggledItemHighlights(
+  previous: TodoListOverlayDto | null,
+  next: TodoListOverlayDto,
+): TodoItemHighlight[] {
+  if (!previous || previous.id !== next.id) return [];
+  const priorCompleted = new Map<number, boolean>();
+  for (const column of previous.columns) {
+    for (const group of column.groups) {
+      for (const item of group.items) {
+        priorCompleted.set(item.id, isTodoItemCompleted(item.completed));
+      }
+    }
+  }
+  const highlights: TodoItemHighlight[] = [];
+  for (const column of next.columns) {
+    for (const group of column.groups) {
+      for (const item of group.items) {
+        const wasCompleted = priorCompleted.get(item.id);
+        if (wasCompleted === undefined) continue;
+        const isCompleted = isTodoItemCompleted(item.completed);
+        if (wasCompleted === isCompleted) continue;
+        highlights.push({ itemId: item.id, mode: isCompleted ? 'check' : 'uncheck' });
+      }
+    }
+  }
+  return highlights;
+}
+
+export function resolveItemHighlights(
+  previous: TodoListOverlayDto | null,
+  next: TodoListOverlayDto,
+  explicit?: TodoItemHighlight,
+): TodoItemHighlight[] {
+  const byId = new Map<number, TodoItemHighlightMode>();
+  for (const highlight of findToggledItemHighlights(previous, next)) {
+    byId.set(highlight.itemId, highlight.mode);
+  }
+  if (explicit) byId.set(explicit.itemId, explicit.mode);
+  return [...byId.entries()].map(([itemId, mode]) => ({ itemId, mode }));
+}
+
+export function mergeItemHighlights(
+  existing: TodoItemHighlight[],
+  incoming: TodoItemHighlight[],
+): TodoItemHighlight[] {
+  const byId = new Map<number, TodoItemHighlightMode>();
+  for (const highlight of existing) byId.set(highlight.itemId, highlight.mode);
+  for (const highlight of incoming) byId.set(highlight.itemId, highlight.mode);
+  return [...byId.entries()].map(([itemId, mode]) => ({ itemId, mode }));
 }
 
 export function isTodoOverlayVisible(visible: boolean | number | undefined | null): boolean {

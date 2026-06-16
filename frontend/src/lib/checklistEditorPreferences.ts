@@ -50,5 +50,7 @@ export function serializeTodoListForm(form: TodoListInput): string {
     background_opacity_percent: form.background_opacity_percent ?? 45,
     background_mode: form.background_mode ?? 'image',
     background_color: form.background_color ?? '#000000',
+    max_display_seconds: form.max_display_seconds ?? null,
+    auto_show_on_item_update: form.auto_show_on_item_update ?? false,
   });
 }

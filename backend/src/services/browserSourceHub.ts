@@ -30,6 +30,8 @@ export interface BrowserSourceStopEvent {
 export interface BrowserSourceTodoShowEvent {
   type: 'todo_show';
   list: TodoListOverlayDto;
+  highlight_item_id?: number;
+  highlight_item_mode?: 'check' | 'uncheck';
 }
 
 export interface BrowserSourceTodoHideEvent {
@@ -39,6 +41,8 @@ export interface BrowserSourceTodoHideEvent {
 export interface BrowserSourceTodoSyncEvent {
   type: 'todo_sync';
   list: TodoListOverlayDto;
+  highlight_item_id?: number;
+  highlight_item_mode?: 'check' | 'uncheck';
 }
 
 export type BrowserSourceSseEvent =
@@ -58,6 +62,27 @@ let nextClientId = 1;
 const clients = new Map<number, SseClient>();
 let activeTodoListId: number | null = null;
 let activeTodoListSnapshot: TodoListOverlayDto | null = null;
+let todoDisplayTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearTodoDisplayTimer(): void {
+  if (todoDisplayTimer) {
+    clearTimeout(todoDisplayTimer);
+    todoDisplayTimer = null;
+  }
+}
+
+function scheduleTodoDisplayTimer(list: TodoListOverlayDto): void {
+  clearTodoDisplayTimer();
+  const sec = list.max_display_seconds;
+  if (sec == null || sec <= 0) return;
+  const listId = list.id;
+  todoDisplayTimer = setTimeout(() => {
+    todoDisplayTimer = null;
+    if (activeTodoListId === listId) {
+      publishBrowserSourceTodoHide();
+    }
+  }, sec * 1000);
+}
 
 export function browserSourceModeAcceptsTodo(mode: BrowserSourceMode): boolean {
   return mode === 'stage' || mode === 'universal';
@@ -125,31 +150,46 @@ export function publishBrowserSourceEvent(event: BrowserSourcePlayEvent): void {
   }
 }
 
-export function publishBrowserSourceTodoShow(list: TodoListOverlayDto): void {
+export function publishBrowserSourceTodoShow(
+  list: TodoListOverlayDto,
+  highlightItemId?: number,
+  highlightItemMode?: 'check' | 'uncheck',
+): void {
   activeTodoListId = list.id;
   activeTodoListSnapshot = list;
   const payload = JSON.stringify({
     type: 'todo_show',
     list,
+    ...(highlightItemId != null ? { highlight_item_id: highlightItemId } : {}),
+    ...(highlightItemMode != null ? { highlight_item_mode: highlightItemMode } : {}),
   } satisfies BrowserSourceTodoShowEvent);
   writeToTodoClients(payload);
+  scheduleTodoDisplayTimer(list);
 }
 
 export function publishBrowserSourceTodoHide(): void {
+  clearTodoDisplayTimer();
   activeTodoListId = null;
   activeTodoListSnapshot = null;
   const payload = JSON.stringify({ type: 'todo_hide' } satisfies BrowserSourceTodoHideEvent);
   writeToTodoClients(payload);
 }
 
-export function publishBrowserSourceTodoSync(list: TodoListOverlayDto): void {
+export function publishBrowserSourceTodoSync(
+  list: TodoListOverlayDto,
+  highlightItemId?: number,
+  highlightItemMode?: 'check' | 'uncheck',
+): void {
   if (activeTodoListId !== list.id) return;
   activeTodoListSnapshot = list;
   const payload = JSON.stringify({
     type: 'todo_sync',
     list,
+    ...(highlightItemId != null ? { highlight_item_id: highlightItemId } : {}),
+    ...(highlightItemMode != null ? { highlight_item_mode: highlightItemMode } : {}),
   } satisfies BrowserSourceTodoSyncEvent);
   writeToTodoClients(payload);
+  scheduleTodoDisplayTimer(list);
 }
 
 export function browserSourceClientsForEvent(event: BrowserSourcePlayEvent): number {

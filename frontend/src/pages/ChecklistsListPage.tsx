@@ -31,7 +31,7 @@ export default function ChecklistsListPage() {
   }, [reload, showError]);
 
   const handleShow = async (id: number) => {
-    if (activeId === id || overlayActionRef.current) return;
+    if (overlayActionRef.current) return;
     overlayActionRef.current = true;
     try {
       await api.showTodoList(id);
@@ -44,7 +44,7 @@ export default function ChecklistsListPage() {
   };
 
   const handleHide = async () => {
-    if (activeId == null || overlayActionRef.current) return;
+    if (overlayActionRef.current) return;
     overlayActionRef.current = true;
     try {
       await api.hideTodoList();
@@ -148,17 +148,15 @@ export default function ChecklistsListPage() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled={onAir}
                     onClick={() => void handleShow(list.id)}
-                    className="rounded-md border border-surface px-3 py-1.5 text-sm hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-md border border-surface px-3 py-1.5 text-sm hover:border-accent"
                   >
                     Show
                   </button>
                   <button
                     type="button"
-                    disabled={!onAir}
                     onClick={() => void handleHide()}
-                    className="rounded-md border border-surface px-3 py-1.5 text-sm hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-md border border-surface px-3 py-1.5 text-sm hover:border-accent"
                   >
                     Hide
                   </button>

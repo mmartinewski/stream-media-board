@@ -219,6 +219,8 @@ const DEFAULT_LIST: TodoListInput = {
   background_opacity_percent: 45,
   background_mode: 'image',
   background_color: '#000000',
+  max_display_seconds: null,
+  auto_show_on_item_update: false,
 };
 
 export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' }) {
@@ -382,6 +384,8 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
       background_opacity_percent: list.background_opacity_percent,
       background_mode: list.theme.background_mode ?? 'image',
       background_color: toHexColor(list.theme.background_color, DEFAULT_LIST.background_color!),
+      max_display_seconds: list.max_display_seconds ?? null,
+      auto_show_on_item_update: list.auto_show_on_item_update ?? false,
     };
     setForm(nextForm);
     savedFormSnapshotRef.current = serializeTodoListForm(nextForm);
@@ -426,6 +430,9 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
       panel_inset_y_percent: form.panel_inset_y_percent ?? 2,
       item_zebra_opacity_percent: form.item_zebra_opacity_percent ?? 24,
       background_opacity_percent: form.background_opacity_percent ?? 45,
+      background_blur_px: 0,
+      max_display_seconds: form.max_display_seconds ?? null,
+      auto_show_on_item_update: form.auto_show_on_item_update ?? false,
       columns: filterVisibleTodoColumns(columns),
     };
   }, [backgroundCacheBust, backgroundUrl, columns, form, listId]);
@@ -576,7 +583,7 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
   };
 
   const handleShow = async () => {
-    if (listId == null || activeId === listId) return;
+    if (listId == null) return;
     const saved = await saveList({ quiet: true, skipBusyState: true, skipApply: true });
     if (!saved) return;
     try {
@@ -1058,17 +1065,15 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
           </label>
           <button
             type="button"
-            disabled={onAir}
             onClick={() => void handleShow()}
-            className="rounded-md border border-surface px-3 py-1.5 text-sm hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md border border-surface px-3 py-1.5 text-sm hover:border-accent"
           >
             Show on overlay
           </button>
           <button
             type="button"
-            disabled={!onAir}
             onClick={() => void handleHide()}
-            className="rounded-md border border-surface px-3 py-1.5 text-sm hover:border-accent disabled:opacity-50"
+            className="rounded-md border border-surface px-3 py-1.5 text-sm hover:border-accent"
           >
             Hide
           </button>
@@ -1663,6 +1668,46 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
                         className="w-full"
                       />
                     </label>
+                    <label className="block text-sm">
+                      <span className="mb-1 block text-text-muted">
+                        Max display time (seconds, 0 = until manual hide)
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={3600}
+                        step={1}
+                        value={form.max_display_seconds ?? 0}
+                        onChange={(e) => {
+                          const raw = Number(e.target.value);
+                          setForm((f) => ({
+                            ...f,
+                            max_display_seconds:
+                              !Number.isFinite(raw) || raw <= 0 ? null : Math.round(raw),
+                          }));
+                        }}
+                        className="w-full rounded-md border border-surface bg-bg px-3 py-2"
+                      />
+                    </label>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={form.auto_show_on_item_update ?? false}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            auto_show_on_item_update: e.target.checked,
+                          }))
+                        }
+                      />
+                      <span>
+                        Show on overlay when an item is checked or unchecked
+                        {form.max_display_seconds != null && form.max_display_seconds > 0
+                          ? ` (auto-hide after ${form.max_display_seconds}s)`
+                          : ''}
+                      </span>
+                    </label>
                   </div>
                 </div>
               </div>
@@ -2038,6 +2083,7 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
                             />
                             <input
                               type="checkbox"
+                              className="mt-2 shrink-0"
                               checked={item.completed}
                               onChange={() =>
                                 void toggleItem(group.id, item.id, item.completed).catch((err) =>
@@ -2053,17 +2099,15 @@ export default function ChecklistEditorPage({ mode }: { mode: 'create' | 'edit' 
                               onRemove={() => removeItemThumb(group.id, item.id)}
                               onError={(message) => showToast(message, 'error')}
                             />
-                            <input
+                            <textarea
+                              rows={Math.min(6, Math.max(1, item.title.split('\n').length))}
                               className={
-                                'min-w-[10rem] flex-1 rounded-md border border-surface/60 bg-bg/40 px-2 py-1 text-sm ' +
+                                'min-w-[10rem] flex-1 resize-y rounded-md border border-surface/60 bg-bg/40 px-2 py-1 text-sm whitespace-pre-line ' +
                                 (item.completed ? 'line-through opacity-70' : '')
                               }
                               value={item.title}
                               onChange={(e) => setItemTitleLocal(group.id, item.id, e.target.value)}
                               onBlur={(e) => void saveItemTitle(group.id, item.id, e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') e.currentTarget.blur();
-                              }}
                             />
                             <ChecklistTrashButton
                               label="Remove item"

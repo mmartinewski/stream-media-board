@@ -51,6 +51,8 @@ import {
   parsePercent,
   parseTodoAnimation,
   parseTodoFontSize,
+  parseMaxDisplaySeconds,
+  parseAutoShowOnItemUpdate,
   type TodoColumnInput,
   type TodoGroupInput,
   type TodoItemInput,
@@ -266,12 +268,13 @@ export function todoListsRouter(): Router {
       if (!list) {
         throw new HttpError(404, 'Checklist not found.', 'todo_list_not_found');
       }
-      if (getActiveTodoListId() === id) {
-        res.json({ status: 'already_shown', active_todo_list_id: id, list });
-        return;
-      }
+      const alreadyShown = getActiveTodoListId() === id;
       publishBrowserSourceTodoShow(list);
-      res.json({ status: 'shown', active_todo_list_id: id, list });
+      res.json({
+        status: alreadyShown ? 'already_shown' : 'shown',
+        active_todo_list_id: id,
+        list,
+      });
     } catch (err) {
       next(err);
     }
@@ -417,8 +420,33 @@ export function todoListsRouter(): Router {
       const db = getDb(paths.databaseFile);
       const listId = parseId(req.params.listId);
       const itemId = parseId(req.params.itemId);
-      const { item } = updateTodoItem(db, listId, itemId, parseItemInput(req.body));
-      syncIfActive(db, listId);
+      const itemInput = parseItemInput(req.body);
+      const priorRow = getTodoItemRow(db, listId, itemId);
+      const priorCompleted = priorRow.completed === 1;
+      const completedChanged =
+        itemInput.completed !== undefined && itemInput.completed !== priorCompleted;
+      const listSettings = getTodoListById(db, listId);
+
+      const { item } = updateTodoItem(db, listId, itemId, itemInput);
+
+      if (completedChanged) {
+        const highlightItemId = itemId;
+        const highlightItemMode = item.completed ? 'check' : 'uncheck';
+        const overlay = getTodoListOverlayDto(db, listId);
+        if (overlay) {
+          if (listSettings?.auto_show_on_item_update) {
+            if (getActiveTodoListId() === listId) {
+              publishBrowserSourceTodoSync(overlay, highlightItemId, highlightItemMode);
+            } else {
+              publishBrowserSourceTodoShow(overlay, highlightItemId, highlightItemMode);
+            }
+          } else {
+            syncIfActive(db, listId, highlightItemId, highlightItemMode);
+          }
+        }
+      } else {
+        syncIfActive(db, listId);
+      }
       res.json(item);
     } catch (err) {
       next(err);
@@ -441,11 +469,16 @@ export function todoListsRouter(): Router {
   return router;
 }
 
-function syncIfActive(db: ReturnType<typeof getDb>, listId: number): void {
+function syncIfActive(
+  db: ReturnType<typeof getDb>,
+  listId: number,
+  highlightItemId?: number,
+  highlightItemMode?: 'check' | 'uncheck',
+): void {
   if (getActiveTodoListId() !== listId) return;
   const list = getTodoListOverlayDto(db, listId);
   if (list) {
-    publishBrowserSourceTodoSync(list);
+    publishBrowserSourceTodoSync(list, highlightItemId, highlightItemMode);
   }
 }
 
@@ -533,6 +566,12 @@ function parseListInput(body: unknown): TodoListInput {
       b.item_zebra_opacity_percent,
       24,
     );
+  }
+  if (b.max_display_seconds !== undefined) {
+    input.max_display_seconds = parseMaxDisplaySeconds(b.max_display_seconds, null);
+  }
+  if (b.auto_show_on_item_update !== undefined) {
+    input.auto_show_on_item_update = parseAutoShowOnItemUpdate(b.auto_show_on_item_update, false);
   }
   return input;
 }

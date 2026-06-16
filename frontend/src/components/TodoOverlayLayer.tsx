@@ -6,6 +6,7 @@ import {
   todoPanelAnchorAttrs,
   todoPanelStyle,
   todoLayerStyle,
+  type TodoItemHighlightMode,
   type TodoListOverlayDto,
 } from '../lib/todoOverlay';
 
@@ -15,6 +16,8 @@ interface TodoOverlayLayerProps {
   phase: 'hidden' | 'entering' | 'visible' | 'exiting';
   onEnterComplete: () => void;
   onExitComplete: () => void;
+  highlightedItems?: ReadonlyMap<number, TodoItemHighlightMode>;
+  onHighlightAnimationEnd?: (itemId: number) => void;
 }
 
 export default function TodoOverlayLayer({
@@ -23,6 +26,8 @@ export default function TodoOverlayLayer({
   phase,
   onEnterComplete,
   onExitComplete,
+  highlightedItems,
+  onHighlightAnimationEnd,
 }: TodoOverlayLayerProps) {
   const enterFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -134,6 +139,8 @@ export default function TodoOverlayLayer({
           style={todoPanelStyle(styleList)}
           animAttrs={animAttrs}
           onTransitionEnd={handleTransitionEnd}
+          highlightedItems={highlightedItems}
+          onHighlightAnimationEnd={onHighlightAnimationEnd}
         />
       </div>
     </div>

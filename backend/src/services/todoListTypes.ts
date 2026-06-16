@@ -89,6 +89,10 @@ export interface TodoListDetailDto {
   item_zebra_opacity_percent: number;
   background_opacity_percent: number;
   background_blur_px: number;
+  /** Seconds before auto-hide; null or 0 = stay until manual hide. */
+  max_display_seconds: number | null;
+  /** Show on overlay when an item completed flag changes. */
+  auto_show_on_item_update: boolean;
   columns: TodoColumnDto[];
 }
 
@@ -120,6 +124,8 @@ export interface TodoListInput {
   background_opacity_percent?: number;
   background_mode?: TodoBackgroundMode;
   background_color?: string;
+  max_display_seconds?: number | null;
+  auto_show_on_item_update?: boolean;
 }
 
 export interface TodoColumnInput {
@@ -249,6 +255,24 @@ export function parseDurationMs(raw: unknown, fallback: number): number {
   const n = typeof raw === 'number' ? raw : Number(raw);
   if (!Number.isFinite(n) || n < 100 || n > 10_000) return fallback;
   return Math.round(n);
+}
+
+/** Overlay auto-hide duration; null/0 = unlimited. */
+export function parseMaxDisplaySeconds(
+  raw: unknown,
+  fallback: number | null = null,
+): number | null {
+  if (raw === null || raw === '' || raw === undefined) return fallback;
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (n > 3600) return 3600;
+  return Math.round(n);
+}
+
+export function parseAutoShowOnItemUpdate(raw: unknown, fallback: boolean): boolean {
+  if (raw === true || raw === 1 || raw === '1' || raw === 'true') return true;
+  if (raw === false || raw === 0 || raw === '0' || raw === 'false') return false;
+  return fallback;
 }
 
 export function parseVisibleFlag(raw: unknown, fallback: boolean): boolean {

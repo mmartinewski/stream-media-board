@@ -52,6 +52,8 @@ interface TodoListRow {
   panel_inset_x_percent: number;
   panel_inset_y_percent: number;
   item_zebra_opacity_percent: number;
+  max_display_seconds: number | null;
+  auto_show_on_item_update: number;
 }
 
 interface TodoGroupRow {
@@ -136,6 +138,7 @@ export function ensureTodoListsSchema(db: BetterDatabase): void {
   ensureTitleFontSizeColumn(db);
   ensureTitleAlignColumn(db);
   ensureListNameColumn(db);
+  ensureDisplayBehaviorColumns(db);
   migrateTodoColumns(db);
 }
 
@@ -144,6 +147,19 @@ function ensureListNameColumn(db: BetterDatabase): void {
   if (rows.some((row) => row.name === 'name')) return;
   db.exec(`ALTER TABLE todo_lists ADD COLUMN name TEXT NOT NULL DEFAULT ''`);
   db.prepare(`UPDATE todo_lists SET name = title WHERE trim(name) = ''`).run();
+}
+
+function ensureDisplayBehaviorColumns(db: BetterDatabase): void {
+  const rows = db.prepare(`PRAGMA table_info(todo_lists)`).all() as Array<{ name: string }>;
+  if (!rows.some((row) => row.name === 'max_display_seconds')) {
+    db.exec(`ALTER TABLE todo_lists ADD COLUMN max_display_seconds INTEGER`);
+  }
+  if (!rows.some((row) => row.name === 'auto_show_on_item_update')) {
+    db.exec(
+      `ALTER TABLE todo_lists ADD COLUMN auto_show_on_item_update INTEGER NOT NULL DEFAULT 0
+        CHECK (auto_show_on_item_update IN (0, 1))`,
+    );
+  }
 }
 
 function ensureFontSizeColumn(db: BetterDatabase): void {
@@ -444,6 +460,11 @@ export function buildTodoListDetailDto(
     item_zebra_opacity_percent: row.item_zebra_opacity_percent ?? 24,
     background_opacity_percent: row.background_opacity_percent,
     background_blur_px: row.background_blur_px ?? 0,
+    max_display_seconds:
+      row.max_display_seconds != null && row.max_display_seconds > 0
+        ? row.max_display_seconds
+        : null,
+    auto_show_on_item_update: row.auto_show_on_item_update === 1,
     columns: columns.map((column) => mapColumn(db, column)),
   };
 }
@@ -480,8 +501,9 @@ export function createTodoList(db: BetterDatabase, input: TodoListInput): TodoLi
         background_mode, background_color, panel_anchor_vertical, panel_anchor_horizontal,
         panel_padding_x_percent, panel_padding_y_percent,
         panel_inset_x_percent, panel_inset_y_percent,
-        item_zebra_opacity_percent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        item_zebra_opacity_percent,
+        max_display_seconds, auto_show_on_item_update
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       name,
@@ -510,6 +532,8 @@ export function createTodoList(db: BetterDatabase, input: TodoListInput): TodoLi
       input.panel_inset_x_percent ?? 2,
       input.panel_inset_y_percent ?? 2,
       input.item_zebra_opacity_percent ?? 24,
+      input.max_display_seconds ?? null,
+      input.auto_show_on_item_update ? 1 : 0,
     );
   const listId = Number(result.lastInsertRowid);
   db.prepare(`INSERT INTO todo_columns (list_id, sort_order) VALUES (?, 10)`).run(listId);
@@ -573,6 +597,8 @@ export function updateTodoList(
       panel_inset_x_percent = ?,
       panel_inset_y_percent = ?,
       item_zebra_opacity_percent = ?,
+      max_display_seconds = ?,
+      auto_show_on_item_update = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE id = ?`,
   ).run(
@@ -606,6 +632,14 @@ export function updateTodoList(
     input.panel_inset_x_percent ?? existing.panel_inset_x_percent ?? 2,
     input.panel_inset_y_percent ?? existing.panel_inset_y_percent ?? 2,
     input.item_zebra_opacity_percent ?? existing.item_zebra_opacity_percent ?? 24,
+    input.max_display_seconds !== undefined
+      ? input.max_display_seconds
+      : existing.max_display_seconds,
+    input.auto_show_on_item_update !== undefined
+      ? input.auto_show_on_item_update
+        ? 1
+        : 0
+      : (existing.auto_show_on_item_update ?? 0),
     id,
   );
   const updated = getTodoListById(db, id);
