@@ -17,6 +17,7 @@ import { todoListsRouter } from './routes/todoLists.js';
 import { browserSourceRouter } from './routes/browserSource.js';
 import { integrationsRouter } from './routes/integrations.js';
 import { mediaSearchRouter } from './routes/mediaSearch.js';
+import { twitchWebhookRouter } from './routes/twitchWebhook.js';
 import { logger } from './lib/logger.js';
 import type { AppPaths } from './config/paths.js';
 
@@ -41,6 +42,7 @@ export function createApp(paths: AppPaths): Express {
   app.use('/api/todo-lists', todoListsRouter());
   app.use('/api/integrations', integrationsRouter());
   app.use('/api/media-search', mediaSearchRouter());
+  app.use('/api/webhooks/twitch', twitchWebhookRouter());
 
   if (existsSync(paths.frontendDist)) {
     app.use(express.static(paths.frontendDist));
