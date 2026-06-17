@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import NewGifModal from '../components/NewGifModal';
 import { useTopCenterToast } from '../components/TopCenterToast';
 import {
   api,
@@ -31,7 +32,7 @@ export default function GifsPage() {
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   const [search, setSearch] = useState('');
-  const [searchLocalOnly, setSearchLocalOnly] = useState(false);
+  const [searchLocalOnly, setSearchLocalOnly] = useState(true);
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [results, setResults] = useState<MediaSearchResult[]>([]);
   const [offset, setOffset] = useState(0);
@@ -41,12 +42,16 @@ export default function GifsPage() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [savedGifKeys, setSavedGifKeys] = useState<Set<string>>(() => new Set());
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null);
-  const [tagsModalGif, setTagsModalGif] = useState<MediaSearchResult | null>(null);
-  const [tagsUserTags, setTagsUserTags] = useState<string[]>([]);
-  const [tagsTagInput, setTagsTagInput] = useState('');
-  const [tagsProviderTags, setTagsProviderTags] = useState<string[]>([]);
-  const [tagsLoading, setTagsLoading] = useState(false);
-  const [tagsSaving, setTagsSaving] = useState(false);
+  const [metadataModalGif, setMetadataModalGif] = useState<MediaSearchResult | null>(null);
+  const [metadataTitle, setMetadataTitle] = useState('');
+  const [metadataUserTags, setMetadataUserTags] = useState<string[]>([]);
+  const [metadataTagInput, setMetadataTagInput] = useState('');
+  const [metadataProviderTags, setMetadataProviderTags] = useState<string[]>([]);
+  const [metadataLoading, setMetadataLoading] = useState(false);
+  const [metadataSaving, setMetadataSaving] = useState(false);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [newGifOpen, setNewGifOpen] = useState(false);
+  const [newGifSaving, setNewGifSaving] = useState(false);
 
   const playActionRef = useRef(false);
   const { showToast, toastPortal } = useTopCenterToast();
@@ -77,8 +82,9 @@ export default function GifsPage() {
 
   useEffect(() => {
     const canSearchOnline = integration?.giphy_api_key_configured && integration.enabled;
-    const canSearchLocal = integration?.giphy_api_key_configured;
-    if (searchLocalOnly ? !canSearchLocal : !canSearchOnline) {
+    if (searchLocalOnly) {
+      // Local cache search works without GIPHY.
+    } else if (!canSearchOnline) {
       setResults([]);
       setOffset(0);
       setTotalCount(0);
@@ -143,12 +149,13 @@ export default function GifsPage() {
   }, []);
 
   const handleDownloadGif = async (gif: MediaSearchResult) => {
+    if (gif.provider !== 'giphy') return;
     const key = gifKey(gif);
     if (downloadingKey === key || savedGifKeys.has(key)) return;
     setDownloadingKey(key);
     try {
       await api.cacheMediaSearch({
-        provider: gif.provider,
+        provider: 'giphy',
         external_id: gif.externalId,
       });
       markGifSaved(gif);
@@ -163,57 +170,129 @@ export default function GifsPage() {
   const addGifTag = useCallback((raw: string) => {
     const tag = raw.trim();
     if (!tag) return;
-    setTagsUserTags((current) => {
+    setMetadataUserTags((current) => {
       const key = tag.toLocaleLowerCase('en');
       if (current.some((item) => item.toLocaleLowerCase('en') === key)) return current;
       return [...current, tag];
     });
-    setTagsTagInput('');
+    setMetadataTagInput('');
   }, []);
 
   const removeGifTag = useCallback((tag: string) => {
-    setTagsUserTags((current) => current.filter((item) => item !== tag));
+    setMetadataUserTags((current) => current.filter((item) => item !== tag));
   }, []);
 
-  const handleOpenTagsModal = async (gif: MediaSearchResult) => {
-    if (!savedGifKeys.has(gifKey(gif)) && !gif.cached) {
-      showToast('Save this GIF locally before editing tags.', 'error');
+  const handleOpenMetadataModal = async (gif: MediaSearchResult) => {
+    const isSaved =
+      gif.provider === 'imported' || savedGifKeys.has(gifKey(gif)) || Boolean(gif.cached);
+    if (!isSaved) {
+      showToast('Save this GIF locally before editing metadata.', 'error');
       return;
     }
-    setTagsModalGif(gif);
-    setTagsUserTags([]);
-    setTagsTagInput('');
-    setTagsProviderTags([]);
-    setTagsLoading(true);
+    setMetadataModalGif(gif);
+    setMetadataTitle(gif.title);
+    setMetadataUserTags([]);
+    setMetadataTagInput('');
+    setMetadataProviderTags([]);
+    setMetadataLoading(true);
     try {
       const metadata = await api.getMediaSearchCache(gif.provider, gif.externalId);
-      setTagsProviderTags(metadata.provider_tags);
-      setTagsUserTags(metadata.user_tags);
+      setMetadataTitle(metadata.title ?? gif.title);
+      setMetadataProviderTags(metadata.provider_tags);
+      setMetadataUserTags(metadata.user_tags);
       if (metadata.cached) markGifSaved(gif);
     } catch (err: unknown) {
       showError(err);
-      setTagsModalGif(null);
+      setMetadataModalGif(null);
     } finally {
-      setTagsLoading(false);
+      setMetadataLoading(false);
     }
   };
 
-  const handleSaveTags = async () => {
-    if (!tagsModalGif) return;
-    setTagsSaving(true);
+  const handleSaveMetadata = async () => {
+    if (!metadataModalGif) return;
+    const title = metadataTitle.trim();
+    if (!title) {
+      showToast('Title is required.', 'error');
+      return;
+    }
+    setMetadataSaving(true);
     try {
-      await api.updateMediaSearchCacheTags(
-        tagsModalGif.provider,
-        tagsModalGif.externalId,
-        tagsUserTags,
+      await api.updateMediaSearchCacheMetadata(
+        metadataModalGif.provider,
+        metadataModalGif.externalId,
+        { title, tags: metadataUserTags },
       );
-      markGifSaved(tagsModalGif);
-      showToast('Tags saved.', 'success');
-      setTagsModalGif(null);
+      const key = gifKey(metadataModalGif);
+      setResults((current) =>
+        current.map((gif) => (gifKey(gif) === key ? { ...gif, title } : gif)),
+      );
+      markGifSaved(metadataModalGif);
+      showToast('Metadata saved.', 'success');
+      setMetadataModalGif(null);
     } catch (err: unknown) {
       showError(err);
     } finally {
-      setTagsSaving(false);
+      setMetadataSaving(false);
+    }
+  };
+
+  const handleDeleteGif = async (gif: MediaSearchResult) => {
+    const isSaved =
+      gif.provider === 'imported' || savedGifKeys.has(gifKey(gif)) || Boolean(gif.cached);
+    if (!isSaved) return;
+
+    const confirmed = window.confirm(`Delete "${gif.title}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const key = gifKey(gif);
+    setDeletingKey(key);
+    try {
+      await api.deleteMediaSearchCache(gif.provider, gif.externalId);
+      setResults((current) => current.filter((item) => gifKey(item) !== key));
+      setSavedGifKeys((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+      setTotalCount((count) => Math.max(0, count - 1));
+      showToast('GIF deleted.', 'success');
+    } catch (err: unknown) {
+      showError(err);
+    } finally {
+      setDeletingKey(null);
+    }
+  };
+
+  const handleSaveNewGif = async (payload: {
+    title: string;
+    tags: string[];
+    file?: File;
+    sourceUrl?: string;
+  }) => {
+    setNewGifSaving(true);
+    try {
+      const form = new FormData();
+      form.append('title', payload.title);
+      form.append('tags', JSON.stringify(payload.tags));
+      if (payload.file) {
+        form.append('file', payload.file);
+      } else if (payload.sourceUrl) {
+        form.append('source_url', payload.sourceUrl);
+      } else {
+        showToast('Add a GIF before saving.', 'error');
+        return;
+      }
+      const saved = await api.importMediaGif(form);
+      markGifSaved(saved.result);
+      setNewGifOpen(false);
+      setSearchLocalOnly(true);
+      setSearch(saved.result.title);
+      showToast('GIF saved.', 'success');
+    } catch (err: unknown) {
+      showError(err);
+    } finally {
+      setNewGifSaving(false);
     }
   };
 
@@ -306,7 +385,11 @@ export default function GifsPage() {
     fireAnalytics(gif.analytics?.onclick);
     try {
       try {
-        await preloadMediaSearchResult(gif);
+        await preloadMediaSearchResult({
+          playUrl: gif.playUrl,
+          isAnimated: gif.isAnimated,
+          provider: gif.provider,
+        });
       } catch {
         // Warm cache when possible; overlay still buffers before showing.
       }
@@ -332,8 +415,8 @@ export default function GifsPage() {
 
   const hasMore = results.length > 0 && results.length < totalCount;
   const ready = integration?.giphy_api_key_configured && integration.enabled;
-  const canShowSearch =
-    integration?.giphy_api_key_configured && (integration.enabled || searchLocalOnly);
+  const canShowOnlineSearch = Boolean(integration?.giphy_api_key_configured && integration.enabled);
+  const canShowSearch = searchLocalOnly || canShowOnlineSearch;
 
   return (
     <>
@@ -341,26 +424,70 @@ export default function GifsPage() {
       <div className="flex w-full max-w-5xl flex-col gap-4 pb-16">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold">GIFs</h1>
-          {integration?.giphy_api_key_configured ? (
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowSettings((open) => !open)}
-              className="rounded-md border border-surface px-3 py-1.5 text-sm hover:border-accent"
+              onClick={() => setNewGifOpen(true)}
+              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-bg"
             >
-              {showSettings ? 'Hide settings' : 'Settings'}
+              New GIF
             </button>
-          ) : null}
+            {integration?.giphy_api_key_configured ? (
+              <button
+                type="button"
+                onClick={() => setShowSettings((open) => !open)}
+                className="rounded-md border border-surface px-3 py-1.5 text-sm hover:border-accent"
+              >
+                {showSettings ? 'Hide settings' : 'Settings'}
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {integrationLoading ? (
           <p className="text-sm text-text-muted">Loading…</p>
         ) : !integration?.giphy_api_key_configured ? (
-          <GiphySetupPanel
-            apiKey={setupApiKey}
-            saving={setupSaving}
-            onApiKeyChange={setSetupApiKey}
-            onSave={() => void handleSetupSave()}
-          />
+          <>
+            <GiphySetupPanel
+              apiKey={setupApiKey}
+              saving={setupSaving}
+              onApiKeyChange={setSetupApiKey}
+              onSave={() => void handleSetupSave()}
+            />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={searchLocalOnly}
+                onChange={(e) => setSearchLocalOnly(e.target.checked)}
+              />
+              Search saved GIFs only
+            </label>
+            {searchLocalOnly ? (
+              <GifsSearchResults
+                search={search}
+                debouncedQuery={debouncedQuery}
+                searchLocalOnly={searchLocalOnly}
+                searchLoading={searchLoading}
+                results={results}
+                playingId={playingId}
+                savedGifKeys={savedGifKeys}
+                downloadingKey={downloadingKey}
+                deletingKey={deletingKey}
+                loadingMore={loadingMore}
+                hasMore={hasMore}
+                onSearchChange={setSearch}
+                onPlay={(gif) => void handlePlay(gif)}
+                onDownload={(gif) => void handleDownloadGif(gif)}
+                onEditMetadata={(gif) => void handleOpenMetadataModal(gif)}
+                onDelete={(gif) => void handleDeleteGif(gif)}
+                onLoadMore={() => void handleLoadMore()}
+              />
+            ) : (
+              <p className="text-sm text-text-muted">
+                Enable saved GIF search above, or add a GIPHY API key to search online.
+              </p>
+            )}
+          </>
         ) : !integration.enabled && !searchLocalOnly ? (
           <div className="rounded-lg border border-surface bg-surface-soft/40 p-4 text-sm">
             <p className="text-text-muted">GIPHY integration is disabled.</p>
@@ -395,78 +522,26 @@ export default function GifsPage() {
             ) : null}
 
             {canShowSearch ? (
-              <>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={searchLocalOnly}
-                onChange={(e) => setSearchLocalOnly(e.target.checked)}
+              <GifsSearchResults
+                search={search}
+                debouncedQuery={debouncedQuery}
+                searchLocalOnly={searchLocalOnly}
+                searchLoading={searchLoading}
+                results={results}
+                playingId={playingId}
+                savedGifKeys={savedGifKeys}
+                downloadingKey={downloadingKey}
+                deletingKey={deletingKey}
+                loadingMore={loadingMore}
+                hasMore={hasMore}
+                onSearchChange={setSearch}
+                onSearchLocalOnlyChange={setSearchLocalOnly}
+                onPlay={(gif) => void handlePlay(gif)}
+                onDownload={(gif) => void handleDownloadGif(gif)}
+                onEditMetadata={(gif) => void handleOpenMetadataModal(gif)}
+                onDelete={(gif) => void handleDeleteGif(gif)}
+                onLoadMore={() => void handleLoadMore()}
               />
-              Search saved GIFs only
-            </label>
-
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
-                <SearchIcon />
-              </span>
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={searchLocalOnly ? 'Search saved GIFs' : 'Search GIFs'}
-                aria-label="Search GIFs"
-                className="w-full rounded-md border border-surface bg-bg-soft py-2 pl-9 pr-3 text-sm outline-none focus:border-accent"
-              />
-            </div>
-
-            {!debouncedQuery && !searchLocalOnly ? (
-              <p className="text-sm text-text-muted">
-                Type a search term to find GIFs. Click a result to play it on the stage overlay.
-              </p>
-            ) : searchLoading ? (
-              <p className="text-sm text-text-muted">Searching…</p>
-            ) : results.length === 0 ? (
-              <p className="text-sm text-text-muted">
-                {searchLocalOnly
-                  ? debouncedQuery
-                    ? `No saved GIFs found for "${debouncedQuery}".`
-                    : 'No saved GIFs yet. Play or save GIFs to see them here.'
-                  : `No GIFs found for "${debouncedQuery}".`}
-              </p>
-            ) : (
-              <>
-                {searchLocalOnly && !debouncedQuery ? (
-                  <p className="text-sm text-text-muted">Most played saved GIFs.</p>
-                ) : null}
-                <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                  {results.map((gif) => (
-                    <GifGridItem
-                      key={gifKey(gif)}
-                      gif={gif}
-                      playing={playingId === gifKey(gif)}
-                      isSaved={savedGifKeys.has(gifKey(gif)) || Boolean(gif.cached)}
-                      downloading={downloadingKey === gifKey(gif)}
-                      onPlay={() => void handlePlay(gif)}
-                      onDownload={() => void handleDownloadGif(gif)}
-                      onEditTags={() => void handleOpenTagsModal(gif)}
-                    />
-                  ))}
-                </ul>
-                {hasMore ? (
-                  <div className="flex justify-center pt-2">
-                    <button
-                      type="button"
-                      disabled={loadingMore}
-                      onClick={() => void handleLoadMore()}
-                      className="rounded-md border border-surface px-4 py-2 text-sm hover:border-accent disabled:opacity-50"
-                    >
-                      {loadingMore ? 'Loading…' : 'Load more'}
-                    </button>
-                  </div>
-                ) : null}
-              </>
-            )}
-              </>
             ) : null}
           </>
         )}
@@ -484,21 +559,156 @@ export default function GifsPage() {
         ) : null}
       </div>
 
-      {tagsModalGif ? (
-        <GifTagsModal
-          gif={tagsModalGif}
-          userTags={tagsUserTags}
-          tagInput={tagsTagInput}
-          providerTags={tagsProviderTags}
-          loading={tagsLoading}
-          saving={tagsSaving}
-          onTagInputChange={setTagsTagInput}
-          onAddTag={addGifTag}
-          onRemoveTag={removeGifTag}
-          onClose={() => setTagsModalGif(null)}
-          onSave={() => void handleSaveTags()}
+      {newGifOpen ? (
+        <NewGifModal
+          saving={newGifSaving}
+          onClose={() => {
+            if (!newGifSaving) setNewGifOpen(false);
+          }}
+          onSave={(payload) => void handleSaveNewGif(payload)}
         />
       ) : null}
+
+      {metadataModalGif ? (
+        <GifMetadataModal
+          gif={metadataModalGif}
+          title={metadataTitle}
+          userTags={metadataUserTags}
+          tagInput={metadataTagInput}
+          providerTags={metadataProviderTags}
+          loading={metadataLoading}
+          saving={metadataSaving}
+          onTitleChange={setMetadataTitle}
+          onTagInputChange={setMetadataTagInput}
+          onAddTag={addGifTag}
+          onRemoveTag={removeGifTag}
+          onClose={() => setMetadataModalGif(null)}
+          onSave={() => void handleSaveMetadata()}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function GifsSearchResults({
+  search,
+  debouncedQuery,
+  searchLocalOnly,
+  searchLoading,
+  results,
+  playingId,
+  savedGifKeys,
+  downloadingKey,
+  deletingKey,
+  loadingMore,
+  hasMore,
+  onSearchChange,
+  onSearchLocalOnlyChange,
+  onPlay,
+  onDownload,
+  onEditMetadata,
+  onDelete,
+  onLoadMore,
+}: {
+  search: string;
+  debouncedQuery: string;
+  searchLocalOnly: boolean;
+  searchLoading: boolean;
+  results: MediaSearchResult[];
+  playingId: string | null;
+  savedGifKeys: Set<string>;
+  downloadingKey: string | null;
+  deletingKey: string | null;
+  loadingMore: boolean;
+  hasMore: boolean;
+  onSearchChange: (value: string) => void;
+  onSearchLocalOnlyChange?: (value: boolean) => void;
+  onPlay: (gif: MediaSearchResult) => void;
+  onDownload: (gif: MediaSearchResult) => void;
+  onEditMetadata: (gif: MediaSearchResult) => void;
+  onDelete: (gif: MediaSearchResult) => void;
+  onLoadMore: () => void;
+}) {
+  return (
+    <>
+      {onSearchLocalOnlyChange ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={searchLocalOnly}
+            onChange={(e) => onSearchLocalOnlyChange(e.target.checked)}
+          />
+          Search saved GIFs only
+        </label>
+      ) : null}
+
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
+          <SearchIcon />
+        </span>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder={searchLocalOnly ? 'Search saved GIFs' : 'Search GIFs'}
+          aria-label="Search GIFs"
+          className="w-full rounded-md border border-surface bg-bg-soft py-2 pl-9 pr-3 text-sm outline-none focus:border-accent"
+        />
+      </div>
+
+      {!debouncedQuery && !searchLocalOnly ? (
+        <p className="text-sm text-text-muted">
+          Type a search term to find GIFs. Click a result to play it on the stage overlay.
+        </p>
+      ) : searchLoading ? (
+        <p className="text-sm text-text-muted">Searching…</p>
+      ) : results.length === 0 ? (
+        <p className="text-sm text-text-muted">
+          {searchLocalOnly
+            ? debouncedQuery
+              ? `No saved GIFs found for "${debouncedQuery}".`
+              : 'No saved GIFs yet. Use New GIF or save GIPHY results to see them here.'
+            : `No GIFs found for "${debouncedQuery}".`}
+        </p>
+      ) : (
+        <>
+          {searchLocalOnly && !debouncedQuery ? (
+            <p className="text-sm text-text-muted">Most played saved GIFs.</p>
+          ) : null}
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {results.map((gif) => (
+              <GifGridItem
+                key={gifKey(gif)}
+                gif={gif}
+                playing={playingId === gifKey(gif)}
+                isSaved={
+                  gif.provider === 'imported' ||
+                  savedGifKeys.has(gifKey(gif)) ||
+                  Boolean(gif.cached)
+                }
+                downloading={downloadingKey === gifKey(gif)}
+                deleting={deletingKey === gifKey(gif)}
+                onPlay={() => onPlay(gif)}
+                onDownload={() => onDownload(gif)}
+                onEditMetadata={() => onEditMetadata(gif)}
+                onDelete={() => onDelete(gif)}
+              />
+            ))}
+          </ul>
+          {hasMore ? (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={onLoadMore}
+                className="rounded-md border border-surface px-4 py-2 text-sm hover:border-accent disabled:opacity-50"
+              >
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </button>
+            </div>
+          ) : null}
+        </>
+      )}
     </>
   );
 }
@@ -661,17 +871,21 @@ function GifGridItem({
   playing,
   isSaved,
   downloading,
+  deleting,
   onPlay,
   onDownload,
-  onEditTags,
+  onEditMetadata,
+  onDelete,
 }: {
   gif: MediaSearchResult;
   playing: boolean;
   isSaved: boolean;
   downloading: boolean;
+  deleting: boolean;
   onPlay: () => void;
   onDownload: () => void;
-  onEditTags: () => void;
+  onEditMetadata: () => void;
+  onDelete: () => void;
 }) {
   const itemRef = useRef<HTMLLIElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -785,29 +999,43 @@ function GifGridItem({
                 className="fixed z-[60] min-w-44 overflow-hidden rounded-md border border-surface bg-bg shadow-xl"
                 role="menu"
               >
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={downloading || isSaved}
-                  onClick={() => {
-                    closeMenu();
-                    onDownload();
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {downloading ? 'Saving…' : isSaved ? 'Saved locally' : 'Save locally'}
-                </button>
+                {gif.provider === 'giphy' ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={downloading || isSaved}
+                    onClick={() => {
+                      closeMenu();
+                      onDownload();
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {downloading ? 'Saving…' : isSaved ? 'Saved locally' : 'Save locally'}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   role="menuitem"
                   disabled={!isSaved}
                   onClick={() => {
                     closeMenu();
-                    onEditTags();
+                    onEditMetadata();
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Edit tags
+                  Edit metadata
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!isSaved || deleting}
+                  onClick={() => {
+                    closeMenu();
+                    onDelete();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-200 hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting…' : 'Delete'}
                 </button>
               </div>,
               document.body,
@@ -818,13 +1046,15 @@ function GifGridItem({
   );
 }
 
-function GifTagsModal({
+function GifMetadataModal({
   gif,
+  title,
   userTags,
   tagInput,
   providerTags,
   loading,
   saving,
+  onTitleChange,
   onTagInputChange,
   onAddTag,
   onRemoveTag,
@@ -832,11 +1062,13 @@ function GifTagsModal({
   onSave,
 }: {
   gif: MediaSearchResult;
+  title: string;
   userTags: string[];
   tagInput: string;
   providerTags: string[];
   loading: boolean;
   saving: boolean;
+  onTitleChange: (value: string) => void;
   onTagInputChange: (value: string) => void;
   onAddTag: (raw: string) => void;
   onRemoveTag: (tag: string) => void;
@@ -844,6 +1076,7 @@ function GifTagsModal({
   onSave: () => void;
 }) {
   const disabled = loading || saving;
+  const canSave = title.trim().length > 0 && !disabled;
 
   return createPortal(
     <div
@@ -855,15 +1088,17 @@ function GifTagsModal({
       <div
         className="w-full max-w-md rounded-lg border border-surface bg-bg p-4 shadow-xl"
         role="dialog"
-        aria-labelledby="gif-tags-modal-title"
+        aria-labelledby="gif-metadata-modal-title"
       >
-        <h2 id="gif-tags-modal-title" className="text-sm font-semibold">
-          Edit search tags
+        <h2 id="gif-metadata-modal-title" className="text-sm font-semibold">
+          Edit metadata
         </h2>
-        <p className="mt-1 text-xs text-text-muted">{gif.title}</p>
+        <p className="mt-1 text-xs text-text-muted">{gif.provider === 'imported' ? 'Imported GIF' : 'Saved GIF'}</p>
         {providerTags.length > 0 ? (
           <div className="mt-3">
-            <p className="text-xs text-text-muted">GIPHY tags (read-only)</p>
+            <p className="text-xs text-text-muted">
+              {gif.provider === 'giphy' ? 'GIPHY tags (read-only)' : 'Provider tags (read-only)'}
+            </p>
             <div className="mt-1 flex flex-wrap gap-2">
               {providerTags.map((tag) => (
                 <span
@@ -876,13 +1111,24 @@ function GifTagsModal({
             </div>
           </div>
         ) : null}
+        <label className="mt-4 block text-sm">
+          <span className="mb-1 block font-medium">Title</span>
+          <input
+            type="text"
+            value={title}
+            disabled={disabled}
+            onChange={(e) => onTitleChange(e.target.value)}
+            placeholder="GIF title"
+            className="w-full rounded-md border border-surface bg-bg-soft px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-50"
+          />
+        </label>
         <div className="mt-4">
-          <label htmlFor="gif-tags-input" className="block text-sm font-medium">
+          <label htmlFor="gif-metadata-tags-input" className="block text-sm font-medium">
             Your tags
           </label>
           <div className="mt-1 flex gap-2">
             <input
-              id="gif-tags-input"
+              id="gif-metadata-tags-input"
               type="text"
               value={tagInput}
               disabled={disabled}
@@ -930,7 +1176,7 @@ function GifTagsModal({
           )}
         </div>
         <p className="mt-2 text-xs text-text-muted">
-          Used when searching saved GIFs. GIPHY tags are kept automatically.
+          Title and tags are used when searching saved GIFs.
         </p>
         <div className="mt-4 flex justify-end gap-2">
           <button
@@ -943,11 +1189,11 @@ function GifTagsModal({
           </button>
           <button
             type="button"
-            disabled={disabled}
+            disabled={!canSave}
             onClick={onSave}
             className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-bg disabled:opacity-50"
           >
-            {saving ? 'Saving…' : 'Save tags'}
+            {saving ? 'Saving…' : 'Save metadata'}
           </button>
         </div>
       </div>

@@ -259,21 +259,58 @@ export function updateMediaSearchCacheUserTags(
     throw new Error('media_search_cache_not_found');
   }
 
+  return updateMediaSearchCacheMetadata(db, provider, externalId, {
+    title: row.title,
+    userTags,
+  });
+}
+
+export function updateMediaSearchCacheMetadata(
+  db: BetterDatabase,
+  provider: MediaSearchProviderId,
+  externalId: string,
+  input: { title: string; userTags: string[] },
+): MediaSearchCacheRow {
+  const row = getMediaSearchCacheEntry(db, provider, externalId);
+  if (!row) {
+    throw new Error('media_search_cache_not_found');
+  }
+
+  const title = input.title.trim();
+  if (!title) {
+    throw new Error('media_search_cache_title_required');
+  }
+
   const providerTags = parseProviderTagsJson(row.tags_json);
-  const searchText = buildMediaSearchText(row.title, providerTags, userTags);
+  const userTags = input.userTags;
+  const searchText = buildMediaSearchText(title, providerTags, userTags);
   const userTagsJson = userTags.length > 0 ? JSON.stringify(userTags) : null;
 
   db.prepare(
     `UPDATE media_search_cache
-     SET user_tags_json = ?, search_text = ?
+     SET title = ?, user_tags_json = ?, search_text = ?
      WHERE provider = ? AND external_id = ?`,
-  ).run(userTagsJson, searchText, provider, externalId);
+  ).run(title, userTagsJson, searchText, provider, externalId);
 
   const updated = getMediaSearchCacheEntry(db, provider, externalId);
   if (!updated) {
-    throw new Error('Failed to update media search cache tags.');
+    throw new Error('Failed to update media search cache metadata.');
   }
   return updated;
+}
+
+export function deleteMediaSearchCacheEntry(
+  db: BetterDatabase,
+  provider: MediaSearchProviderId,
+  externalId: string,
+): MediaSearchCacheRow | null {
+  const row = getMediaSearchCacheEntry(db, provider, externalId);
+  if (!row) return null;
+  db.prepare(`DELETE FROM media_search_cache WHERE provider = ? AND external_id = ?`).run(
+    provider,
+    externalId,
+  );
+  return row;
 }
 
 export function getMediaSearchCacheMetadata(

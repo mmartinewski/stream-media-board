@@ -25,8 +25,10 @@ export interface MediaSearchAnalyticsUrls {
   onsent: string;
 }
 
+export type MediaSearchProvider = 'giphy' | 'imported';
+
 export interface MediaSearchResult {
-  provider: 'giphy';
+  provider: MediaSearchProvider;
   externalId: string;
   title: string;
   previewUrl: string;
@@ -48,14 +50,14 @@ export interface MediaSearchPlayResponse {
   status: string;
   playback: 'browser_source';
   connected_clients?: number;
-  provider: 'giphy';
+  provider: MediaSearchProvider;
   external_id: string;
   is_animated: boolean;
   cached?: boolean;
 }
 
 export interface MediaSearchCacheMetadata {
-  provider: 'giphy';
+  provider: MediaSearchProvider;
   external_id: string;
   title: string | null;
   provider_tags: string[];
@@ -287,7 +289,7 @@ export const api = {
     return request<MediaSearchResponse>(`/api/media-search${query ? `?${query}` : ''}`);
   },
   playMediaSearch: (body: {
-    provider: 'giphy';
+    provider: MediaSearchProvider;
     external_id: string;
     layout_area_id?: number;
   }) =>
@@ -302,14 +304,19 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
-  getMediaSearchCache: (provider: 'giphy', externalId: string) =>
+  importMediaGif: (form: FormData) =>
+    request<{ ok: true; cached: boolean; result: MediaSearchResult }>('/api/media-search/import', {
+      method: 'POST',
+      body: form,
+    }),
+  getMediaSearchCache: (provider: MediaSearchProvider, externalId: string) =>
     request<MediaSearchCacheMetadata>(
       `/api/media-search/cache/${encodeURIComponent(provider)}/${encodeURIComponent(externalId)}`,
     ),
-  updateMediaSearchCacheTags: (provider: 'giphy', externalId: string, tags: string[]) =>
+  updateMediaSearchCacheTags: (provider: MediaSearchProvider, externalId: string, tags: string[]) =>
     request<{
       ok: true;
-      provider: 'giphy';
+      provider: MediaSearchProvider;
       external_id: string;
       provider_tags: string[];
       user_tags: string[];
@@ -318,6 +325,28 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tags }),
     }),
+  updateMediaSearchCacheMetadata: (
+    provider: MediaSearchProvider,
+    externalId: string,
+    body: { title: string; tags: string[] },
+  ) =>
+    request<{
+      ok: true;
+      provider: MediaSearchProvider;
+      external_id: string;
+      title: string;
+      provider_tags: string[];
+      user_tags: string[];
+    }>(`/api/media-search/cache/${encodeURIComponent(provider)}/${encodeURIComponent(externalId)}/metadata`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  deleteMediaSearchCache: (provider: MediaSearchProvider, externalId: string) =>
+    request<{ ok: true; provider: MediaSearchProvider; external_id: string }>(
+      `/api/media-search/cache/${encodeURIComponent(provider)}/${encodeURIComponent(externalId)}`,
+      { method: 'DELETE' },
+    ),
   sendMediaSearchAnalytics: (url: string) =>
     request<{ ok: true }>('/api/media-search/analytics', {
       method: 'POST',

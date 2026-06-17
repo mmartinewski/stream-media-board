@@ -1,4 +1,4 @@
-export type MediaSearchProviderId = 'giphy';
+export type MediaSearchProviderId = 'giphy' | 'imported';
 
 export type GiphyContentRating = 'g' | 'pg' | 'pg-13' | 'r';
 

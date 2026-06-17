@@ -7,10 +7,12 @@ import {
   getMediaSearchCacheEntry,
   type MediaSearchCacheRow,
   parseProviderTagsJson,
+  deleteMediaSearchCacheEntry,
   touchMediaSearchCachePlayed,
   upsertMediaSearchCacheEntry,
 } from '../db/repositories/mediaSearchCache.js';
 import { HttpError } from '../middleware/errorHandler.js';
+import { tryTranscodeToStageMp4 } from './ffmpeg.js';
 import type { MediaSearchProviderId, MediaSearchResult } from './mediaSearchTypes.js';
 
 function assertPathUnderDir(dir: string, filePath: string): void {
@@ -227,4 +229,82 @@ export async function downloadMediaSearchResultToCache(
     );
   }
   return mediaSearchResultFromCacheRow(row);
+}
+
+function unlinkIfExists(paths: AppPaths, filePath: string | null | undefined): void {
+  if (!filePath) return;
+  assertPathUnderDir(paths.mediaGifs, filePath);
+  if (!existsSync(filePath)) return;
+  try {
+    unlinkSync(filePath);
+  } catch {
+    // ignore missing file
+  }
+}
+
+/** Legacy imports stored GIF as the play file; transcode to MP4 for stage overlay video playback. */
+export async function ensureCachedMediaReadyForPlay(
+  paths: AppPaths,
+  db: BetterDatabase,
+  provider: MediaSearchProviderId,
+  externalId: string,
+): Promise<MediaSearchCacheRow> {
+  const row = getMediaSearchCacheEntry(db, provider, externalId);
+  if (!row || !cacheEntryHasValidFiles(paths, row)) {
+    throw new HttpError(404, 'Cached media not found.', 'media_cache_not_found');
+  }
+
+  const mediaExt = extname(row.media_path).toLowerCase();
+  if (mediaExt !== '.gif' && mediaExt !== '.webp') {
+    return row;
+  }
+
+  const base = buildCacheFileBasename(provider, externalId);
+  const mp4Path = join(paths.mediaGifs, `${base}.mp4`);
+  const transcoded = await tryTranscodeToStageMp4({
+    ffmpegExe: paths.ffmpegExe,
+    inputFile: row.media_path,
+    outputFile: mp4Path,
+  });
+  if (!transcoded) {
+    return row;
+  }
+
+  const previewPath = row.preview_path ?? row.media_path;
+  return upsertMediaSearchCacheEntry(db, {
+    provider,
+    externalId,
+    title: row.title,
+    tags: parseProviderTagsJson(row.tags_json),
+    userTags: parseProviderTagsJson(row.user_tags_json),
+    mediaPath: mp4Path,
+    previewPath,
+    mediaKind: 'video',
+    width: row.width ?? 480,
+    height: row.height ?? 270,
+    isAnimated: true,
+    sourcePlayUrl: localCacheMediaUrl(provider, externalId),
+    sourcePreviewUrl: localCachePreviewUrl(provider, externalId),
+  });
+}
+
+export function deleteCachedMediaSearch(
+  paths: AppPaths,
+  db: BetterDatabase,
+  provider: MediaSearchProviderId,
+  externalId: string,
+): void {
+  const row = deleteMediaSearchCacheEntry(db, provider, externalId);
+  if (!row) {
+    throw new HttpError(404, 'Cached GIF not found.', 'media_cache_not_found');
+  }
+
+  unlinkIfExists(paths, row.media_path);
+  unlinkIfExists(paths, row.preview_path);
+
+  const base = buildCacheFileBasename(provider, externalId);
+  for (const ext of ['.gif', '.mp4', '.jpg', '.jpeg', '.png', '.webp']) {
+    unlinkIfExists(paths, join(paths.mediaGifs, `${base}${ext}`));
+    unlinkIfExists(paths, join(paths.mediaGifs, `${base}_preview${ext}`));
+  }
 }

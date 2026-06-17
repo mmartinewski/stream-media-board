@@ -127,9 +127,31 @@ export function parseGiphyExternalId(raw: unknown): string {
   return id;
 }
 
+const IMPORTED_EXTERNAL_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function parseImportedExternalId(raw: unknown): string {
+  const id = typeof raw === 'string' ? raw.trim() : '';
+  if (!id) {
+    throw new HttpError(400, 'external_id is required.', 'missing_external_id');
+  }
+  if (!IMPORTED_EXTERNAL_ID_RE.test(id)) {
+    throw new HttpError(400, 'external_id is invalid.', 'invalid_external_id');
+  }
+  return id;
+}
+
+export function parseMediaSearchExternalId(
+  provider: MediaSearchProviderId,
+  raw: unknown,
+): string {
+  return provider === 'imported' ? parseImportedExternalId(raw) : parseGiphyExternalId(raw);
+}
+
 export function parseMediaSearchProvider(raw: unknown): MediaSearchProviderId {
   const provider = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
   if (provider === 'giphy') return 'giphy';
+  if (provider === 'imported') return 'imported';
   throw new HttpError(400, 'Unsupported media search provider.', 'unsupported_provider');
 }
 

@@ -36,3 +36,15 @@ export const todoBackgroundMultipart = multer({
     fields: 4,
   },
 });
+
+const FIFTY_MB = 50 * 1024 * 1024;
+
+/** Imported GIF/image upload (<= 50 MB). */
+export const mediaGifImportMultipart = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: FIFTY_MB,
+    files: 1,
+    fields: 8,
+  },
+});

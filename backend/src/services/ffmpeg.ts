@@ -81,3 +81,43 @@ export async function cutToMp4(options: CutToMp4Options): Promise<void> {
 
   await execFileAsync(options.ffmpegExe, args);
 }
+
+export interface TranscodeToStageMp4Options {
+  ffmpegExe: string;
+  inputFile: string;
+  outputFile: string;
+}
+
+/** Looping GIF/WebP → H.264 MP4 for stage browser-source playback. */
+export async function transcodeToStageMp4(options: TranscodeToStageMp4Options): Promise<void> {
+  const args = [
+    '-y',
+    '-loglevel',
+    'error',
+    '-i',
+    options.inputFile,
+    '-vf',
+    'scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '23',
+    '-movflags',
+    '+faststart',
+    '-an',
+    options.outputFile,
+  ];
+
+  await execFileAsync(options.ffmpegExe, args);
+}
+
+export async function tryTranscodeToStageMp4(options: TranscodeToStageMp4Options): Promise<boolean> {
+  try {
+    await transcodeToStageMp4(options);
+    return true;
+  } catch {
+    return false;
+  }
+}

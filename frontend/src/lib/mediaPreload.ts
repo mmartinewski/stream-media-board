@@ -75,6 +75,10 @@ export function preloadImageUrl(url: string): Promise<void> {
 export function preloadMediaSearchResult(item: {
   playUrl: string;
   isAnimated: boolean;
+  provider?: string;
 }): Promise<void> {
+  if (item.provider === 'imported' && item.isAnimated) {
+    return preloadImageUrl(item.playUrl);
+  }
   return item.isAnimated ? preloadVideoUrl(item.playUrl) : preloadImageUrl(item.playUrl);
 }
