@@ -12,6 +12,7 @@ import { APP_SHELL_H_PADDING } from '../lib/appShellLayout';
 import { getBrowserOverlayUrl } from '../lib/overlay';
 import { IN_CATEGORY_SEARCH_PARAM, isInCategorySearch } from '../lib/browseSearchScope';
 import { writeBrowseSearchInCategoryOnly } from '../lib/browsePreferences';
+import { useDismissOnOutsidePointerDown } from '../hooks/useDismissOnOutsidePointerDown';
 
 type ToolbarToastVariant = 'error' | 'success';
 
@@ -64,6 +65,19 @@ export default function MediaToolbar() {
   );
   const globalVolumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const controlsPanelRef = useRef<HTMLDivElement | null>(null);
+  const controlsButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const closeControls = useCallback(() => setControlsOpen(false), []);
+
+  useDismissOnOutsidePointerDown(
+    controlsOpen,
+    closeControls,
+    (target) =>
+      controlsPanelRef.current?.contains(target) ||
+      controlsButtonRef.current?.contains(target) ||
+      false,
+  );
 
   const showToast = useCallback((message: string, variant: ToolbarToastVariant) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -310,6 +324,7 @@ export default function MediaToolbar() {
             {gridMode ? <ListViewIcon /> : <GridViewIcon />}
           </button>
           <button
+            ref={controlsButtonRef}
             type="button"
             onClick={() => setControlsOpen((current) => !current)}
             aria-expanded={controlsOpen}
@@ -357,7 +372,10 @@ export default function MediaToolbar() {
         ) : null}
 
         {controlsOpen ? (
-          <div className={'space-y-3 border-t border-surface/50 pb-2 pt-2 ' + APP_SHELL_H_PADDING}>
+          <div
+            ref={controlsPanelRef}
+            className={'space-y-3 border-t border-surface/50 pb-2 pt-2 ' + APP_SHELL_H_PADDING}
+          >
             <div>
               <label
                 htmlFor="global-playback-volume"

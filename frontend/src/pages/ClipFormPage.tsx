@@ -116,7 +116,7 @@ interface CropRect {
   height: number;
 }
 
-const MAX_CLIP_SEC = 30;
+const MAX_CLIP_SEC = 300;
 const MIN_CLIP_SEC = 0.05;
 const MAX_THUMBNAIL_BYTES = 1024 * 1024;
 const VALID_THUMBNAIL_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -1536,8 +1536,8 @@ export default function ClipFormPage({ mode }: Props) {
         </h2>
         <p className="text-sm text-text-muted">
           {editorKind === 'video'
-            ? 'Load a YouTube link or a video from your computer, choose the segment (max. 30s), and save for browser overlay playback.'
-            : 'Load the audio, choose the segment (max. 30s), adjust the thumbnail, and save for browser overlay playback.'}
+            ? 'Load a YouTube link or a video from your computer, choose the segment (max. 5 min), and save for browser overlay playback.'
+            : 'Load the audio, choose the segment (max. 5 min), adjust the thumbnail, and save for browser overlay playback.'}
         </p>
       </header>
 
@@ -1847,7 +1847,7 @@ export default function ClipFormPage({ mode }: Props) {
             {timesOk && (
               <span className="text-xs text-text-muted">
                 Segment duration: {clipLen.toFixed(3)}s
-                {!clipLenOk && ` - maximum ${MAX_CLIP_SEC}s`}
+                {!clipLenOk && ` - maximum ${MAX_CLIP_SEC / 60} min`}
                 {!durationOk && ' - outside the downloaded duration'}
               </span>
             )}

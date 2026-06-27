@@ -16,7 +16,7 @@ import { isValidTimeString, timeStringToSeconds } from '../services/timeFormat.j
 import { getYoutubeThumbnailCandidates } from '../services/youtube.js';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_CLIP_SECONDS = 30;
+const MAX_CLIP_SECONDS = 300;
 
 export function stagingRouter(paths: AppPaths): Router {
   const router = Router();
@@ -80,7 +80,7 @@ export function stagingRouter(paths: AppPaths): Router {
           throw new HttpError(400, 'end_time must be greater than start_time.', 'invalid_range');
         }
         if (endSec - startSec > MAX_CLIP_SECONDS + 0.001) {
-          throw new HttpError(400, 'The segment cannot exceed 30 seconds.', 'clip_too_long');
+          throw new HttpError(400, 'The segment cannot exceed 5 minutes.', 'clip_too_long');
         }
         if (startSec < -0.001 || endSec > meta.durationSeconds + 0.05) {
           throw new HttpError(

@@ -3,7 +3,7 @@ import { bindDocumentPointerDrag } from '../lib/documentPointerDrag';
 import { isValidTimeString, secondsToTimeString, timeStringToSeconds } from '../lib/time';
 import { effectiveVolumeToElement } from '../lib/volume';
 
-const MAX_CLIP_SEC = 30;
+const MAX_CLIP_SEC = 300;
 const MIN_CLIP_SEC = 0.05;
 /** Stop slightly before end so we never overshoot between checks (one ~60fps frame). */
 const END_STOP_LEAD_SEC = 1 / 60;
@@ -668,7 +668,7 @@ export default function VideoRangeTrimmer({
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-medium">Video trim</h3>
         <span className="text-xs text-text-muted">
-          Drag the handles on the timeline (max. {MAX_CLIP_SEC}s).
+          Drag the handles on the timeline (max. {MAX_CLIP_SEC / 60} min).
         </span>
       </div>
       <div className="relative mt-3 aspect-video w-full overflow-hidden rounded-md border border-surface bg-black">

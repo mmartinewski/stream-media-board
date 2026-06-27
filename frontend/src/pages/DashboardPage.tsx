@@ -17,6 +17,7 @@ import {
 } from '../lib/api';
 import { useDashboardView } from '../contexts/DashboardViewContext';
 import CategoryEditModal from '../components/CategoryEditModal';
+import { useDismissOnOutsidePointerDown } from '../hooks/useDismissOnOutsidePointerDown';
 import { clampClipVolume, clipVolumeMax } from '../lib/volume';
 
 function resolvePlayLayoutAreaId(
@@ -167,6 +168,8 @@ export default function DashboardPage() {
   const { gridMode } = useDashboardView();
   const gridPopoverAnchorRef = useRef<HTMLElement | null>(null);
   const gridPopoverMenuRef = useRef<HTMLDivElement | null>(null);
+  const categoryMenuAnchorRef = useRef<HTMLElement | null>(null);
+  const categoryMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const [gridPopoverStyle, setGridPopoverStyle] = useState<CSSProperties | null>(null);
 
   const showToast = useCallback((message: string, variant: DashboardToastVariant) => {
@@ -232,6 +235,29 @@ export default function DashboardPage() {
     gridPopoverMenuRef.current = null;
     setGridPopoverStyle(null);
   }, []);
+
+  const closeCategoryMenu = useCallback(() => {
+    setOpenCategoryMenuKey(null);
+    categoryMenuAnchorRef.current = null;
+  }, []);
+
+  useDismissOnOutsidePointerDown(
+    openMenuKey != null || playAtFlyoutKey != null,
+    closeClipCardMenus,
+    (target) =>
+      gridPopoverMenuRef.current?.contains(target) ||
+      gridPopoverAnchorRef.current?.contains(target) ||
+      false,
+  );
+
+  useDismissOnOutsidePointerDown(
+    openCategoryMenuKey != null,
+    closeCategoryMenu,
+    (target) =>
+      categoryMenuPanelRef.current?.contains(target) ||
+      categoryMenuAnchorRef.current?.contains(target) ||
+      false,
+  );
 
   const syncGridPopoverPosition = useCallback(() => {
     const anchorEl = gridPopoverAnchorRef.current;
@@ -427,7 +453,7 @@ export default function DashboardPage() {
   }, [metadataSaving]);
 
   const openCategoryEdit = (category: { id: number; name: string }) => {
-    setOpenCategoryMenuKey(null);
+    closeCategoryMenu();
     setCategoryToEdit(category);
   };
 
@@ -744,13 +770,15 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     aria-label="Open category menu"
-                    onClick={() =>
-                      setOpenCategoryMenuKey((current) =>
-                        current === `category-${section.category.id}`
-                          ? null
-                          : `category-${section.category.id}`,
-                      )
-                    }
+                    onClick={(e) => {
+                      const key = `category-${section.category.id}`;
+                      if (openCategoryMenuKey === key) {
+                        closeCategoryMenu();
+                        return;
+                      }
+                      categoryMenuAnchorRef.current = e.currentTarget;
+                      setOpenCategoryMenuKey(key);
+                    }}
                     className="rounded-full border border-surface bg-bg px-2 py-1 text-lg leading-none text-text-muted hover:border-accent hover:text-text"
                   >
                     ⋮
@@ -761,10 +789,13 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       aria-label="Close category menu"
-                      onClick={() => setOpenCategoryMenuKey(null)}
+                      onClick={closeCategoryMenu}
                       className="fixed inset-0 z-20 cursor-default bg-transparent"
                     />
-                    <div className="absolute right-0 top-9 z-30 min-w-36 overflow-hidden rounded-md border border-surface bg-bg shadow-xl">
+                    <div
+                      ref={categoryMenuPanelRef}
+                      className="absolute right-0 top-9 z-30 min-w-36 overflow-hidden rounded-md border border-surface bg-bg shadow-xl"
+                    >
                       <button
                         type="button"
                         onClick={() =>

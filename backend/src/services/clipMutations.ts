@@ -23,7 +23,7 @@ import {
 import { generateSquareThumbnail, parseCropMeta } from './thumbnail.js';
 import { isValidTimeString, timeStringToSeconds } from './timeFormat.js';
 
-const MAX_CLIP_SECONDS = 30;
+const MAX_CLIP_SECONDS = 300;
 const STAGING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type ClipType = 'audio' | 'video';
@@ -80,7 +80,7 @@ function validateTimesAgainstStaging(
   }
   const durationSec = endSec - startSec;
   if (durationSec > MAX_CLIP_SECONDS + 0.001) {
-    throw new HttpError(400, 'The segment cannot exceed 30 seconds.', 'clip_too_long');
+    throw new HttpError(400, 'The segment cannot exceed 5 minutes.', 'clip_too_long');
   }
   if (startSec < -0.001 || endSec > meta.durationSeconds + 0.05) {
     throw new HttpError(

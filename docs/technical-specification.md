@@ -41,7 +41,7 @@ The app uses an audio-first workflow:
 5. When saving, the backend uses FFmpeg to trim and encode the selected segment to MP3.
 6. Saved clips are played on the host machine through `ffplay`.
 
-Saved clips are limited to 30 seconds. Time values use the single contract format `HH:MM:SS.mmm`.
+Saved clips are limited to 5 minutes. Time values use the single contract format `HH:MM:SS.mmm`.
 
 ## 4. Thumbnail Pipeline
 
@@ -104,7 +104,7 @@ The clip form supports:
 ## 8. Validation and Safety
 
 - Source videos must be 10 minutes or shorter.
-- Saved clip segments must be 30 seconds or shorter.
+- Saved clip segments must be 5 minutes or shorter.
 - Thumbnail uploads are limited to 1 MB.
 - Media paths are checked to ensure they stay under the app media directories.
 - The v1 app has no authentication and assumes a trusted local network.

@@ -18,6 +18,7 @@ import { computeGridPopoverStyle } from '../lib/clipCardPopover';
 import { parseTags, toDownloadFilename } from '../lib/clipLabels';
 import { resolvePlayLayoutAreaId } from '../lib/clipPlaybackLayout';
 import { clampClipVolume } from '../lib/volume';
+import { useDismissOnOutsidePointerDown } from './useDismissOnOutsidePointerDown';
 
 const CARD_ERROR_DISMISS_MS = 4000;
 const VOLUME_SAVE_DEBOUNCE_MS = 400;
@@ -134,6 +135,15 @@ export function useClipCards({ reloadClips, updateClipVolume }: UseClipCardsOpti
       window.removeEventListener('resize', syncGridPopoverPosition);
     };
   }, [openMenuKey, playAtFlyoutKey, editFlyoutKey, volumeFlyoutKey, syncGridPopoverPosition]);
+
+  useDismissOnOutsidePointerDown(
+    openMenuKey != null || playAtFlyoutKey != null,
+    closeClipCardMenus,
+    (target) =>
+      gridPopoverMenuRef.current?.contains(target) ||
+      gridPopoverAnchorRef.current?.contains(target) ||
+      false,
+  );
 
   useEffect(() => {
     let cancelled = false;
