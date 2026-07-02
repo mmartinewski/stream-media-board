@@ -11,6 +11,7 @@ Clips play on a transparent overlay in your stream; the dashboard triggers playb
 - **Browser overlay** with multiple modes: audio, stage (layout areas), legacy landscape/portrait.
 - Per-clip volume, favorites, metadata edit, and layout-area defaults for video.
 - Live-control dashboard: search, large cards, remote play, LAN-friendly UI.
+- **Twitch Stream Presets** — one-click apply of stream title, category, tags, language, and content classification to your Twitch channel (OBS-style stream info).
 - Local persistence in SQLite (`better-sqlite3`).
 - Windows tray app with one-click **Open in Browser**.
 
@@ -86,6 +87,8 @@ Step-by-step notes, troubleshooting (black background), and audio vs video behav
 **Layout Stage:** single-source layout areas and in-app positioning — **[docs/overlay-layout-stage.md](docs/overlay-layout-stage.md)**.
 
 **GIPHY media search:** search and play GIFs on the stage overlay from **GIFs** in the app — **[docs/giphy-media-search.md](docs/giphy-media-search.md)** (API key setup, offline cache, tags).
+
+**Twitch Stream Presets:** apply stream metadata to Twitch from **Twitch presets** in the app — **[docs/twitch-stream-presets.md](docs/twitch-stream-presets.md)** (Twitch Developer app, device code login, locked content labels).
 
 Release checklist: [docs/next-release.md](docs/next-release.md).
 

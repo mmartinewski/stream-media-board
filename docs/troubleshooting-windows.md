@@ -82,3 +82,22 @@ powershell -ExecutionPolicy Bypass -File scripts\diagnose-installed.ps1
 ```
 
 This checks paths, port 3847, starts the backend briefly, and prints log tails.
+
+## Twitch Stream Presets
+
+Full setup: **[twitch-stream-presets.md](./twitch-stream-presets.md)**.
+
+### Connection or apply fails
+
+- **Client ID** and **Client Secret** must be saved under **Twitch presets** → **Configurar Twitch**. Secret is required to refresh tokens.
+- Reconnect with **Conectar conta Twitch** (device code at [twitch.tv/activate](https://www.twitch.tv/activate)).
+- Check `latest.log` for `twitch_api_error` or token refresh messages.
+
+### Locked content labels (padlock) not shown
+
+- Apply the preset once while offline to cache mandatory labels for that game.
+- While **live**, the app does not probe Twitch to detect locks for a newly selected category.
+
+### Category flickered on Twitch
+
+- When editing a preset offline, the app may temporarily set your Twitch category to detect game-mandatory labels, then restore the previous category. This does not run while you are live.

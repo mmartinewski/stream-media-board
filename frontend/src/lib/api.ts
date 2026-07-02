@@ -209,6 +209,60 @@ export interface YoutubeSessionResponse {
   login_hint: string;
 }
 
+export interface TwitchIntegrationStatus {
+  client_id_configured: boolean;
+  connected: boolean;
+  broadcaster_login: string | null;
+  broadcaster_display_name: string | null;
+}
+
+export interface TwitchCategoryResult {
+  id: string;
+  name: string;
+  box_art_url: string;
+}
+
+export interface TwitchContentClassificationLabel {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface TwitchStreamPreset {
+  id: number;
+  name: string;
+  sort_order: number;
+  title: string;
+  game_id: string;
+  game_name: string;
+  game_box_art_url: string;
+  tags: string[];
+  broadcaster_language: string;
+  content_classification_labels: string[];
+  is_branded_content: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TwitchStreamPresetInput = Omit<
+  TwitchStreamPreset,
+  'id' | 'created_at' | 'updated_at'
+>;
+
+export const TWITCH_STREAM_LANGUAGES = [
+  { code: 'pt', label: 'Português' },
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
+  { code: 'fr', label: 'Français' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'it', label: 'Italiano' },
+  { code: 'ja', label: '日本語' },
+  { code: 'ko', label: '한국어' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'zh', label: '中文' },
+  { code: 'other', label: 'Other' },
+] as const;
+
 async function request<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const res = await fetch(input, init);
   if (!res.ok) {
@@ -673,5 +727,81 @@ export const api = {
     request<import('./todoOverlay').TodoItemDto>(
       `/api/todo-lists/${listId}/items/${itemId}/thumbnail`,
       { method: 'DELETE' },
+    ),
+  getTwitchStatus: () =>
+    request<TwitchIntegrationStatus>('/api/integrations/twitch/status'),
+  updateTwitchConfig: (body: {
+    client_id?: string;
+    client_secret?: string;
+    remove_client_secret?: boolean;
+  }) =>
+    request<TwitchIntegrationStatus>('/api/integrations/twitch/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  getTwitchAuthUrl: (returnTo?: string) => {
+    const query = returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : '';
+    return request<{ url: string }>(`/api/integrations/twitch/auth-url${query}`);
+  },
+  startTwitchDeviceAuth: () =>
+    request<{
+      user_code: string;
+      verification_uri: string;
+      expires_in: number;
+      interval: number;
+    }>('/api/integrations/twitch/device/start', { method: 'POST' }),
+  pollTwitchDeviceAuth: () =>
+    request<
+      | { status: 'pending' }
+      | { status: 'slow_down'; interval: number }
+      | { status: 'error'; message: string }
+      | ({ status: 'connected' } & TwitchIntegrationStatus)
+    >('/api/integrations/twitch/device/poll', { method: 'POST' }),
+  twitchLogout: () =>
+    request<{ ok: true }>('/api/integrations/twitch/logout', { method: 'POST' }),
+  searchTwitchCategories: (q: string) =>
+    request<{ categories: TwitchCategoryResult[] }>(
+      `/api/integrations/twitch/categories/search?q=${encodeURIComponent(q)}`,
+    ),
+  searchTwitchTags: (q: string, gameId?: string) => {
+    const params = new URLSearchParams({ q });
+    if (gameId) params.set('game_id', gameId);
+    return request<{ tags: string[] }>(`/api/integrations/twitch/tags/search?${params.toString()}`);
+  },
+  getTwitchContentLabels: () =>
+    request<{ labels: TwitchContentClassificationLabel[] }>(
+      '/api/integrations/twitch/content-labels',
+    ),
+  getTwitchLockedContentLabels: (gameId: string) =>
+    request<{ locked: string[] }>(
+      `/api/integrations/twitch/content-labels/locked?game_id=${encodeURIComponent(gameId)}`,
+    ),
+  getTwitchPresets: () =>
+    request<{ presets: TwitchStreamPreset[] }>('/api/integrations/twitch/presets'),
+  createTwitchPreset: (body: TwitchStreamPresetInput) =>
+    request<TwitchStreamPreset>('/api/integrations/twitch/presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  updateTwitchPreset: (id: number, body: TwitchStreamPresetInput) =>
+    request<TwitchStreamPreset>(`/api/integrations/twitch/presets/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  deleteTwitchPreset: (id: number) =>
+    request<{ status: string; id: number }>(`/api/integrations/twitch/presets/${id}`, {
+      method: 'DELETE',
+    }),
+  duplicateTwitchPreset: (id: number) =>
+    request<TwitchStreamPreset>(`/api/integrations/twitch/presets/${id}/duplicate`, {
+      method: 'POST',
+    }),
+  applyTwitchPreset: (id: number) =>
+    request<{ ok: true; preset: TwitchStreamPreset }>(
+      `/api/integrations/twitch/presets/${id}/apply`,
+      { method: 'POST' },
     ),
 };

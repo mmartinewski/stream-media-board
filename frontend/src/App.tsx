@@ -9,6 +9,7 @@ import ChecklistEditorPage from './pages/ChecklistEditorPage';
 import GifsPage from './pages/GifsPage';
 import BrowseCategoriesPage from './pages/BrowseCategoriesPage';
 import BrowseCategoryClipsPage from './pages/BrowseCategoryClipsPage';
+import TwitchPresetsPage from './pages/TwitchPresetsPage';
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/clips/new" element={<ClipFormPage mode="create" />} />
         <Route path="/clips/:id/edit" element={<ClipFormPage mode="edit" />} />
         <Route path="/settings/layout-areas" element={<LayoutAreasPage />} />
+        <Route path="/settings/twitch-presets" element={<TwitchPresetsPage />} />
       </Route>
     </Routes>
   );

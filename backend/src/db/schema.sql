@@ -50,3 +50,19 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 
 INSERT OR IGNORE INTO app_settings(key, value) VALUES ('playback_volume', '75');
+
+CREATE TABLE IF NOT EXISTS twitch_stream_presets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    title TEXT NOT NULL DEFAULT '',
+    game_id TEXT NOT NULL DEFAULT '',
+    game_name TEXT NOT NULL DEFAULT '',
+    game_box_art_url TEXT NOT NULL DEFAULT '',
+    tags TEXT NOT NULL DEFAULT '[]',
+    broadcaster_language TEXT NOT NULL DEFAULT 'pt',
+    content_classification_labels TEXT NOT NULL DEFAULT '[]',
+    is_branded_content INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

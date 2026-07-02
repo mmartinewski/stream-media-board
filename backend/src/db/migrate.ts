@@ -5,6 +5,7 @@ import {
 } from './repositories/layoutAreas.js';
 import { ensureTodoListsSchema } from './repositories/todoLists.js';
 import { ensureMediaSearchCacheSchema } from './repositories/mediaSearchCache.js';
+import { ensureTwitchStreamPresetsSchema } from './repositories/twitchPresets.js';
 
 // IMPORTANT: keep this in sync with `schema.sql` in the same folder.
 // The `.sql` file is the human reference; this DDL is what actually runs.
@@ -74,6 +75,7 @@ export function migrate(db: BetterDatabase): void {
   seedLayoutAreasIfEmpty(db);
   ensureTodoListsSchema(db);
   ensureMediaSearchCacheSchema(db);
+  ensureTwitchStreamPresetsSchema(db);
   migrateClipCategories(db);
   ensureColumn(db, 'categories', 'thumbnail_original_path', 'TEXT');
   ensureColumn(db, 'categories', 'thumbnail_cropped_path', 'TEXT');

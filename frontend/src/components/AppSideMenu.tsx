@@ -26,6 +26,12 @@ const NAV_ITEMS: ReadonlyArray<{
     icon: <GifsIcon className={NAV_ICON_CLASS} />,
   },
   {
+    to: '/settings/twitch-presets',
+    label: 'Twitch presets',
+    end: false,
+    icon: <TwitchIcon className={NAV_ICON_CLASS} />,
+  },
+  {
     to: '/settings/layout-areas',
     label: 'Layout areas',
     end: false,
@@ -188,6 +194,15 @@ function LayoutAreasIcon({ className }: { className?: string }) {
     >
       <rect x="3" y="3" width="14" height="14" rx="1.5" />
       <path d="M3 10h14M10 3v14" />
+    </svg>
+  );
+}
+
+function TwitchIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" className={className} fill="currentColor">
+      <path d="M4 3 2 6.5v9h3v3l3.5-3H13L18 11V3H4zm12 6.5-2.5 2.5h-3L8 15v-2.5H5.5V4.5H16v5z" />
+      <path d="M12.5 6.5h1.5v4h-1.5zm-3 0H11v4H9.5z" />
     </svg>
   );
 }
