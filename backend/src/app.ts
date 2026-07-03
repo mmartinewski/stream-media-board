@@ -19,6 +19,8 @@ import { integrationsRouter } from './routes/integrations.js';
 import { mediaSearchRouter } from './routes/mediaSearch.js';
 import { twitchIntegrationRouter } from './routes/twitchIntegration.js';
 import { twitchWebhookRouter } from './routes/twitchWebhook.js';
+import { streamerBotWebhookRouter } from './routes/streamerBotWebhook.js';
+import { alertsRouter } from './routes/alerts.js';
 import { logger } from './lib/logger.js';
 import type { AppPaths } from './config/paths.js';
 
@@ -45,6 +47,8 @@ export function createApp(paths: AppPaths): Express {
   app.use('/api/media-search', mediaSearchRouter());
   app.use('/api/integrations/twitch', twitchIntegrationRouter());
   app.use('/api/webhooks/twitch', twitchWebhookRouter());
+  app.use('/api/webhooks/streamerbot', streamerBotWebhookRouter());
+  app.use('/api/alerts', alertsRouter());
 
   if (existsSync(paths.frontendDist)) {
     app.use(express.static(paths.frontendDist));

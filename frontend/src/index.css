@@ -162,6 +162,137 @@ body.browser-source-root #root {
   pointer-events: none;
 }
 
+.alerts-overlay-stage {
+  background: transparent;
+}
+
+.alert-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.alert-overlay-anchor {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  transform: translateX(-50%);
+  width: min(92vw, 720px);
+  display: flex;
+  justify-content: center;
+}
+
+.alert-card {
+  --alert-accent: #9146ff;
+  --alert-animation-duration: 500ms;
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  max-width: 720px;
+  border-radius: 0.875rem;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-24px) scale(0.96);
+  transition:
+    opacity var(--alert-animation-duration) ease-out,
+    transform var(--alert-animation-duration) ease-out;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: linear-gradient(
+    135deg,
+    rgb(18 18 22 / 0.96) 0%,
+    rgb(32 32 38 / 0.94) 100%
+  );
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.35),
+    0 0 32px color-mix(in srgb, var(--alert-accent) 28%, transparent),
+    0 20px 56px rgb(0 0 0 / 0.55);
+}
+
+.alert-card.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.alert-card.is-visible.is-exiting {
+  opacity: 0;
+  transform: translateY(-16px) scale(0.98);
+  transition:
+    opacity 360ms ease-in,
+    transform 360ms ease-in;
+}
+
+.alert-card-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.25rem;
+  font-size: 1.75rem;
+  line-height: 1;
+  background: color-mix(in srgb, var(--alert-accent) 22%, rgb(12 12 16));
+  border-right: 1px solid color-mix(in srgb, var(--alert-accent) 35%, transparent);
+  text-shadow: 0 2px 12px color-mix(in srgb, var(--alert-accent) 55%, transparent);
+}
+
+.alert-card-content {
+  flex: 1;
+  min-width: 0;
+  padding: 0.85rem 1.15rem 0.95rem;
+}
+
+.alert-card-label {
+  margin: 0 0 0.3rem;
+  color: color-mix(in srgb, var(--alert-accent) 78%, white);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.alert-card-title {
+  margin: 0;
+  color: rgb(250 250 250 / 0.96);
+  font-size: clamp(1.05rem, 2.2vw, 1.4rem);
+  font-weight: 600;
+  line-height: 1.35;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+}
+
+.alert-card-highlight {
+  color: var(--alert-accent);
+  font-weight: 800;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--alert-accent) 45%, transparent);
+}
+
+.alert-card-subtitle {
+  margin: 0.4rem 0 0;
+  color: rgb(212 212 216 / 0.78);
+  font-size: clamp(0.8rem, 1.6vw, 0.92rem);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.alert-card--follow { --alert-accent: #bf94ff; }
+.alert-card--sub { --alert-accent: #4ade80; }
+.alert-card--sub_prime { --alert-accent: #38bdf8; }
+.alert-card--resub { --alert-accent: #c084fc; }
+.alert-card--gift_sub,
+.alert-card--gift_bomb { --alert-accent: #f472b6; }
+.alert-card--pay_it_forward,
+.alert-card--gift_paid_upgrade,
+.alert-card--prime_paid_upgrade { --alert-accent: #a78bfa; }
+.alert-card--cheer { --alert-accent: #c084fc; }
+.alert-card--raid { --alert-accent: #f87171; }
+.alert-card--channel_points { --alert-accent: #22d3ee; }
+.alert-card--hype_train_start,
+.alert-card--hype_train_level,
+.alert-card--hype_train_end { --alert-accent: #fb923c; }
+.alert-card--unknown { --alert-accent: #a1a1aa; }
+
 .todo-layer {
   position: absolute;
   inset: 0;

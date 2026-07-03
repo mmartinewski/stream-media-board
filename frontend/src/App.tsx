@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import AppShell from './AppShell';
 import BrowserSourcePage from './pages/BrowserSourcePage';
+import AlertsOverlayPage from './pages/AlertsOverlayPage';
 import DashboardPage from './pages/DashboardPage';
 import ClipFormPage from './pages/ClipFormPage';
 import LayoutAreasPage from './pages/LayoutAreasPage';
@@ -15,6 +16,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/overlay/browser" element={<BrowserSourcePage />} />
+      <Route path="/overlay/alerts" element={<AlertsOverlayPage />} />
       <Route element={<AppShell />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/browse" element={<BrowseCategoriesPage />} />

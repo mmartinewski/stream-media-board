@@ -12,6 +12,7 @@ Clips play on a transparent overlay in your stream; the dashboard triggers playb
 - Per-clip volume, favorites, metadata edit, and layout-area defaults for video.
 - Live-control dashboard: search, large cards, remote play, LAN-friendly UI.
 - **Twitch Stream Presets** — one-click apply of stream title, category, tags, language, and content classification to your Twitch channel (OBS-style stream info).
+- **Twitch live alerts** — Streamer.bot webhooks drive a dedicated overlay (`/overlay/alerts`) with queued toast notifications and sound for follows, subs, bits, raids, and more.
 - Local persistence in SQLite (`better-sqlite3`).
 - Windows tray app with one-click **Open in Browser**.
 
@@ -52,8 +53,9 @@ Use separate browser sources when you want different on-canvas layouts. Add `?mo
 | **Universal** | `?mode=universal` | Audio + all video clips |
 | **Landscape** | `?mode=landscape` | Landscape video only *(legacy)* |
 | **Portrait** | `?mode=portrait` | Portrait video only *(legacy)* |
+| **Alerts** | `/overlay/alerts` | Twitch alert toasts (Streamer.bot webhooks) |
 
-**Recommended setup (v0.8+):** **`audio`** for audio clips + **`stage`** for video at canvas resolution (e.g. 1920×1080). Configure areas under **Layout areas** in the app.
+**Recommended setup (v0.8+):** **`audio`** for audio clips + **`stage`** for video at canvas resolution (e.g. 1920×1080). Configure areas under **Layout areas** in the app. Add **`/overlay/alerts`** as a separate full-canvas browser source for Twitch alerts (see [docs/twitch-live-alerts.md](docs/twitch-live-alerts.md)).
 
 | Environment | Example (audio) |
 | --- | --- |
@@ -89,6 +91,8 @@ Step-by-step notes, troubleshooting (black background), and audio vs video behav
 **GIPHY media search:** search and play GIFs on the stage overlay from **GIFs** in the app — **[docs/giphy-media-search.md](docs/giphy-media-search.md)** (API key setup, offline cache, tags).
 
 **Twitch Stream Presets:** apply stream metadata to Twitch from **Twitch presets** in the app — **[docs/twitch-stream-presets.md](docs/twitch-stream-presets.md)** (Twitch Developer app, device code login, locked content labels).
+
+**Twitch live alerts:** Streamer.bot → webhook → alert overlay — **[docs/twitch-live-alerts.md](docs/twitch-live-alerts.md)** (import `docs/streamerbot/Live Alert Event Ingestion.cfg`, OBS browser source at `/overlay/alerts`).
 
 Release checklist: [docs/next-release.md](docs/next-release.md).
 

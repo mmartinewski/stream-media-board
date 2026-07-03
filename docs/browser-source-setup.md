@@ -17,8 +17,9 @@ Append `?mode=` to choose which clips that source receives. Use the same host an
 | **Universal** | `?mode=universal` (default if omitted) | Audio + all video clips |
 | **Landscape** | `?mode=landscape` | Landscape video only *(legacy)* |
 | **Portrait** | `?mode=portrait` | Portrait video only *(legacy)* |
+| **Alerts** | `/overlay/alerts` | Twitch alert toasts (Streamer.bot; see [twitch-live-alerts.md](./twitch-live-alerts.md)) |
 
-**Recommended setup (v0.8+):** **`?mode=audio`** for the soundboard + **`?mode=stage`** for video at stream resolution (e.g. 1920×1080). Configure areas under **Layout areas** in the app.
+**Recommended setup (v0.8+):** **`?mode=audio`** for the soundboard + **`?mode=stage`** for video at stream resolution (e.g. 1920×1080). Configure areas under **Layout areas** in the app. Add **`/overlay/alerts`** for Twitch live alerts.
 
 **Legacy setup:** separate **`?mode=landscape`** and **`?mode=portrait`** sources with manual OBS positioning. Do **not** add `universal` if you already use orientation-specific video sources (duplicate playback).
 
