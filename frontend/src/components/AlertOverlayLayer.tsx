@@ -100,11 +100,10 @@ export default function AlertOverlayLayer({
   return (
     <div className="alert-overlay" aria-live="polite" aria-hidden={phase !== 'visible'}>
       <div className="alert-overlay-anchor">
-        <div className="alert-card-sway">
-          <div
-            className={`alert-card alert-card--${alert.kind} ${phaseClass}`}
-            onTransitionEnd={handleTransitionEnd}
-          >
+        <div
+          className={`alert-card alert-card--${alert.kind} ${phaseClass}`}
+          onTransitionEnd={handleTransitionEnd}
+        >
           <div className="alert-card-icon" aria-hidden>
             {ALERT_KIND_ICONS[alert.kind]}
           </div>
@@ -117,7 +116,6 @@ export default function AlertOverlayLayer({
               <p className="alert-card-subtitle">{alert.subtitle}</p>
             ) : null}
           </div>
-        </div>
         </div>
       </div>
     </div>
