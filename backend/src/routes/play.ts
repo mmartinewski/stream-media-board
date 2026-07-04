@@ -13,6 +13,7 @@ import {
 } from '../services/browserSourceHub.js';
 import { resolveLayoutAreaForClip } from '../services/layoutAreaResolve.js';
 import { resolveClipVideoOrientation } from '../services/videoOrientation.js';
+import { resolveStoredMediaPath } from '../services/storedMediaPaths.js';
 
 export function playRouter(paths: AppPaths): Router {
   const router = Router();
@@ -35,7 +36,8 @@ export function playRouter(paths: AppPaths): Router {
       const body = (req.body ?? {}) as { layout_area_id?: unknown };
       const requestedLayoutAreaId = parseOptionalLayoutAreaId(body.layout_area_id);
       if (row.clip_type === 'video') {
-        if (!row.video_path || !existsSync(row.video_path)) {
+        const videoPath = row.video_path ? resolveStoredMediaPath(paths, row.video_path) : '';
+        if (!videoPath || !existsSync(videoPath)) {
           throw new HttpError(404, 'Video file not found.', 'video_missing');
         }
         publishBrowserSourceStopAll();
@@ -63,7 +65,8 @@ export function playRouter(paths: AppPaths): Router {
         });
         return;
       }
-      if (!existsSync(row.audio_path)) {
+      const audioPath = resolveStoredMediaPath(paths, row.audio_path);
+      if (!existsSync(audioPath)) {
         throw new HttpError(404, 'Audio file not found.', 'audio_missing');
       }
       publishBrowserSourceStopAll();

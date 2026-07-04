@@ -12,6 +12,7 @@ import {
   localCacheMediaUrl,
   mediaSearchResultFromCacheRow,
 } from './mediaSearchCacheStore.js';
+import { toStoredMediaPath } from './storedMediaPaths.js';
 import type { MediaSearchResult } from './mediaSearchTypes.js';
 import { parseMediaSearchUserTags } from './giphyClient.js';
 
@@ -259,8 +260,8 @@ export async function importMediaGifToCache(
     title: input.title,
     tags: [],
     userTags: input.userTags,
-    mediaPath,
-    previewPath,
+    mediaPath: toStoredMediaPath(paths, mediaPath),
+    previewPath: previewPath ? toStoredMediaPath(paths, previewPath) : null,
     mediaKind,
     width,
     height,

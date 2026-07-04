@@ -1,10 +1,14 @@
 import { renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { extname, join, resolve, sep } from 'node:path';
+import { extname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { AppPaths } from '../config/paths.js';
 import type { CategoryRow } from '../db/repositories/categories.js';
-import { HttpError } from '../middleware/errorHandler.js';
 import { generateSquareThumbnail, parseCropMeta } from './thumbnail.js';
+import {
+  assertStoredPathUnderDir,
+  resolveStoredMediaPath,
+  toStoredMediaPath,
+} from './storedMediaPaths.js';
 
 export interface CategoryThumbnailUpdateInput {
   thumbnailBuffer?: Buffer;
@@ -27,14 +31,6 @@ function cleanupQuiet(paths: string[]): void {
     } catch {
       /* noop */
     }
-  }
-}
-
-function assertPathUnderDir(dir: string, filePath: string): void {
-  const base = resolve(dir) + sep;
-  const target = resolve(filePath);
-  if (!target.toLowerCase().startsWith(base.toLowerCase())) {
-    throw new HttpError(500, 'Path is outside the allowed directory.', 'path_safety');
   }
 }
 
@@ -69,9 +65,10 @@ export function deleteCategoryThumbnailFiles(
   paths: AppPaths,
   row: Pick<CategoryRow, 'thumbnail_original_path' | 'thumbnail_cropped_path'>,
 ): void {
-  for (const filePath of [row.thumbnail_original_path, row.thumbnail_cropped_path]) {
-    if (!filePath) continue;
-    assertPathUnderDir(paths.mediaCategoryThumbnails, filePath);
+  for (const stored of [row.thumbnail_original_path, row.thumbnail_cropped_path]) {
+    if (!stored) continue;
+    const filePath = resolveStoredMediaPath(paths, stored);
+    assertStoredPathUnderDir(paths, paths.mediaCategoryThumbnails, stored);
     cleanupQuiet([filePath]);
   }
 }
@@ -91,8 +88,15 @@ export async function applyCategoryThumbnailUpdate(
     };
   }
 
-  let newOrig = current.thumbnail_original_path;
-  let newCrop = current.thumbnail_cropped_path;
+  const currentOrig = current.thumbnail_original_path
+    ? resolveStoredMediaPath(paths, current.thumbnail_original_path)
+    : null;
+  const currentCrop = current.thumbnail_cropped_path
+    ? resolveStoredMediaPath(paths, current.thumbnail_cropped_path)
+    : null;
+
+  let newOrig = currentOrig;
+  let newCrop = currentCrop;
   let cropMetaOut = current.thumbnail_crop_meta;
 
   const processId = randomUUID().replace(/-/g, '');
@@ -125,31 +129,26 @@ export async function applyCategoryThumbnailUpdate(
     }
     deleteCategoryThumbnailFiles(paths, {
       thumbnail_original_path:
-        current.thumbnail_original_path && current.thumbnail_original_path !== newOrig
+        current.thumbnail_original_path && currentOrig !== newOrig
           ? current.thumbnail_original_path
           : null,
       thumbnail_cropped_path:
-        current.thumbnail_cropped_path && current.thumbnail_cropped_path !== newCrop
+        current.thumbnail_cropped_path && currentCrop !== newCrop
           ? current.thumbnail_cropped_path
           : null,
     });
-  } else if (input.cropJson && current.thumbnail_original_path) {
+  } else if (input.cropJson && currentOrig) {
     const parsed = parseCropMeta(input.cropJson);
     if (parsed) {
-      assertPathUnderDir(paths.mediaCategoryThumbnails, current.thumbnail_original_path);
+      assertStoredPathUnderDir(paths, paths.mediaCategoryThumbnails, current.thumbnail_original_path);
       const tmpCrop = join(paths.mediaCategoryThumbnails, `tmp_cat_${processId}_re.jpg`);
       const croppedTarget =
-        current.thumbnail_cropped_path ??
-        join(paths.mediaCategoryThumbnails, `${categoryId}_1x1.jpg`);
+        currentCrop ?? join(paths.mediaCategoryThumbnails, `${categoryId}_1x1.jpg`);
       try {
-        const applied = await generateSquareThumbnail(
-          current.thumbnail_original_path,
-          tmpCrop,
-          parsed,
-        );
+        const applied = await generateSquareThumbnail(currentOrig, tmpCrop, parsed);
         cropMetaOut = JSON.stringify(applied);
-        if (current.thumbnail_cropped_path) {
-          cleanupQuiet([current.thumbnail_cropped_path]);
+        if (currentCrop) {
+          cleanupQuiet([currentCrop]);
         }
         renameSync(tmpCrop, croppedTarget);
         newCrop = croppedTarget;
@@ -161,8 +160,8 @@ export async function applyCategoryThumbnailUpdate(
   }
 
   return {
-    thumbnail_original_path: newOrig,
-    thumbnail_cropped_path: newCrop,
+    thumbnail_original_path: newOrig ? toStoredMediaPath(paths, newOrig) : null,
+    thumbnail_cropped_path: newCrop ? toStoredMediaPath(paths, newCrop) : null,
     thumbnail_crop_meta: cropMetaOut,
   };
 }

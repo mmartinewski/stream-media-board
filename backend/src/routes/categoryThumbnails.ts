@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import type { AppPaths } from '../config/paths.js';
 import { getDb } from '../db/connection.js';
 import { getCategoryById } from '../db/repositories/categories.js';
 import { HttpError } from '../middleware/errorHandler.js';
+import { assertStoredPathUnderDir } from '../services/storedMediaPaths.js';
 
 export function categoryThumbnailsRouter(paths: AppPaths): Router {
   const router = Router();
@@ -22,17 +22,16 @@ export function categoryThumbnailsRouter(paths: AppPaths): Router {
         if (!row) {
           throw new HttpError(404, 'Category not found.', 'category_not_found');
         }
-        const filePath =
+        const stored =
           kind === 'original' ? row.thumbnail_original_path : row.thumbnail_cropped_path;
-        if (!filePath) {
+        if (!stored) {
           throw new HttpError(404, 'Thumbnail not found.', 'thumb_missing');
         }
-        const resolved = resolve(filePath);
-        const base = resolve(paths.mediaCategoryThumbnails);
-        const rel = relative(base, resolved);
-        if (rel.startsWith('..') || rel.includes('..')) {
-          throw new HttpError(500, 'Invalid thumbnail path.', 'path_safety');
-        }
+        const resolved = assertStoredPathUnderDir(
+          paths,
+          paths.mediaCategoryThumbnails,
+          stored,
+        );
         if (!existsSync(resolved)) {
           throw new HttpError(404, 'Thumbnail not found.', 'thumb_missing');
         }

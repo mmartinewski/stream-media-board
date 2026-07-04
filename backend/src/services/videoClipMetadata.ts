@@ -3,6 +3,7 @@ import type { Database as BetterDatabase } from 'better-sqlite3';
 import type { AppPaths } from '../config/paths.js';
 import { logger } from '../lib/logger.js';
 import { probeVideoDimensions } from './ffprobe.js';
+import { resolveStoredMediaPath } from './storedMediaPaths.js';
 import {
   deriveVideoOrientation,
   parseVideoOrientation,
@@ -60,9 +61,10 @@ export async function backfillVideoClipMetadata(
   let updated = 0;
   for (const row of rows) {
     if (row.video_orientation) continue;
-    if (!existsSync(row.video_path)) continue;
+    const videoPath = resolveStoredMediaPath(paths, row.video_path);
+    if (!existsSync(videoPath)) continue;
     try {
-      const { width, height } = await probeVideoDimensions(paths.ffprobeExe, row.video_path);
+      const { width, height } = await probeVideoDimensions(paths.ffprobeExe, videoPath);
       updateClipVideoMetadata(db, row.id, {
         video_width: width,
         video_height: height,

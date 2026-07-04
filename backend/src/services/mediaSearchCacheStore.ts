@@ -14,6 +14,11 @@ import {
 import { HttpError } from '../middleware/errorHandler.js';
 import { tryTranscodeToStageMp4 } from './ffmpeg.js';
 import type { MediaSearchProviderId, MediaSearchResult } from './mediaSearchTypes.js';
+import {
+  assertStoredPathUnderDir,
+  resolveStoredMediaPath,
+  toStoredMediaPath,
+} from './storedMediaPaths.js';
 
 function assertPathUnderDir(dir: string, filePath: string): void {
   const base = resolve(dir) + sep;
@@ -70,11 +75,13 @@ export function cacheEntryHasValidFiles(
   paths: AppPaths,
   row: MediaSearchCacheRow,
 ): boolean {
-  assertPathUnderDir(paths.mediaGifs, row.media_path);
-  if (!existsSync(row.media_path)) return false;
+  const mediaPath = resolveStoredMediaPath(paths, row.media_path);
+  assertStoredPathUnderDir(paths, paths.mediaGifs, row.media_path);
+  if (!existsSync(mediaPath)) return false;
   if (row.preview_path) {
-    assertPathUnderDir(paths.mediaGifs, row.preview_path);
-    if (!existsSync(row.preview_path)) return false;
+    const previewPath = resolveStoredMediaPath(paths, row.preview_path);
+    assertStoredPathUnderDir(paths, paths.mediaGifs, row.preview_path);
+    if (!existsSync(previewPath)) return false;
   }
   return true;
 }
@@ -153,8 +160,8 @@ export async function persistMediaSearchResultToCache(
     title: item.title,
     tags: item.tags ?? [],
     userTags: preservedUserTags,
-    mediaPath: resolvedMediaPath,
-    previewPath: resolvedPreviewPath,
+    mediaPath: toStoredMediaPath(paths, resolvedMediaPath),
+    previewPath: resolvedPreviewPath ? toStoredMediaPath(paths, resolvedPreviewPath) : null,
     mediaKind: item.isAnimated ? 'video' : 'image',
     width: item.width,
     height: item.height,
@@ -187,7 +194,7 @@ export function resolveCachedMediaSearchResult(
 
 export function resolveCacheMediaContentType(row: MediaSearchCacheRow): string {
   if (row.media_kind === 'video') return 'video/mp4';
-  const ext = extname(row.media_path).toLowerCase();
+  const ext = extname(row.media_path.replace(/\\/g, '/')).toLowerCase();
   if (ext === '.png') return 'image/png';
   if (ext === '.webp') return 'image/webp';
   if (ext === '.gif') return 'image/gif';
@@ -231,9 +238,10 @@ export async function downloadMediaSearchResultToCache(
   return mediaSearchResultFromCacheRow(row);
 }
 
-function unlinkIfExists(paths: AppPaths, filePath: string | null | undefined): void {
-  if (!filePath) return;
-  assertPathUnderDir(paths.mediaGifs, filePath);
+function unlinkIfExists(paths: AppPaths, stored: string | null | undefined): void {
+  if (!stored) return;
+  assertStoredPathUnderDir(paths, paths.mediaGifs, stored);
+  const filePath = resolveStoredMediaPath(paths, stored);
   if (!existsSync(filePath)) return;
   try {
     unlinkSync(filePath);
@@ -254,7 +262,7 @@ export async function ensureCachedMediaReadyForPlay(
     throw new HttpError(404, 'Cached media not found.', 'media_cache_not_found');
   }
 
-  const mediaExt = extname(row.media_path).toLowerCase();
+  const mediaExt = extname(resolveStoredMediaPath(paths, row.media_path)).toLowerCase();
   if (mediaExt !== '.gif' && mediaExt !== '.webp') {
     return row;
   }
@@ -263,7 +271,7 @@ export async function ensureCachedMediaReadyForPlay(
   const mp4Path = join(paths.mediaGifs, `${base}.mp4`);
   const transcoded = await tryTranscodeToStageMp4({
     ffmpegExe: paths.ffmpegExe,
-    inputFile: row.media_path,
+    inputFile: resolveStoredMediaPath(paths, row.media_path),
     outputFile: mp4Path,
   });
   if (!transcoded) {
@@ -277,7 +285,7 @@ export async function ensureCachedMediaReadyForPlay(
     title: row.title,
     tags: parseProviderTagsJson(row.tags_json),
     userTags: parseProviderTagsJson(row.user_tags_json),
-    mediaPath: mp4Path,
+    mediaPath: toStoredMediaPath(paths, mp4Path),
     previewPath,
     mediaKind: 'video',
     width: row.width ?? 480,
@@ -304,7 +312,23 @@ export function deleteCachedMediaSearch(
 
   const base = buildCacheFileBasename(provider, externalId);
   for (const ext of ['.gif', '.mp4', '.jpg', '.jpeg', '.png', '.webp']) {
-    unlinkIfExists(paths, join(paths.mediaGifs, `${base}${ext}`));
-    unlinkIfExists(paths, join(paths.mediaGifs, `${base}_preview${ext}`));
+    const mediaCandidate = join(paths.mediaGifs, `${base}${ext}`);
+    const previewCandidate = join(paths.mediaGifs, `${base}_preview${ext}`);
+    assertPathUnderDir(paths.mediaGifs, mediaCandidate);
+    assertPathUnderDir(paths.mediaGifs, previewCandidate);
+    if (existsSync(mediaCandidate)) {
+      try {
+        unlinkSync(mediaCandidate);
+      } catch {
+        /* noop */
+      }
+    }
+    if (existsSync(previewCandidate)) {
+      try {
+        unlinkSync(previewCandidate);
+      } catch {
+        /* noop */
+      }
+    }
   }
 }

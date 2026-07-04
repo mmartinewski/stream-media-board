@@ -65,6 +65,7 @@ export default function TwitchPresetsPage() {
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
   const [tagSearching, setTagSearching] = useState(false);
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
+  const [tagHighlightIndex, setTagHighlightIndex] = useState(-1);
   const [deviceAuth, setDeviceAuth] = useState<{
     user_code: string;
     verification_uri: string;
@@ -72,6 +73,7 @@ export default function TwitchPresetsPage() {
   } | null>(null);
   const categoryDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tagDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tagListRef = useRef<HTMLUListElement>(null);
   const devicePollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reload = useCallback(async () => {
@@ -156,6 +158,16 @@ export default function TwitchPresetsPage() {
     };
   }, [tagInput, tagMenuOpen, status?.connected, form.game_id]);
 
+  useEffect(() => {
+    setTagHighlightIndex(-1);
+  }, [tagInput, tagSuggestions]);
+
+  useEffect(() => {
+    if (tagHighlightIndex < 0 || !tagListRef.current) return;
+    const item = tagListRef.current.children[tagHighlightIndex] as HTMLElement | undefined;
+    item?.scrollIntoView({ block: 'nearest' });
+  }, [tagHighlightIndex]);
+
   const fetchLockedLabels = useCallback(
     async (gameId: string) => {
       if (!status?.connected || !gameId.trim()) {
@@ -230,6 +242,7 @@ export default function TwitchPresetsPage() {
     setTagInput('');
     setTagSuggestions([]);
     setTagMenuOpen(false);
+    setTagHighlightIndex(-1);
   }, []);
 
   const openEdit = useCallback(
@@ -374,12 +387,48 @@ export default function TwitchPresetsPage() {
       setTagInput('');
       setTagMenuOpen(false);
       setTagSuggestions([]);
+      setTagHighlightIndex(-1);
       return;
     }
     setForm((f) => ({ ...f, tags: [...f.tags, trimmed] }));
     setTagInput('');
     setTagMenuOpen(false);
     setTagSuggestions([]);
+    setTagHighlightIndex(-1);
+  };
+
+  const handleTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const hasSuggestions = tagMenuOpen && tagSuggestions.length > 0;
+
+    if (event.key === 'ArrowDown') {
+      if (!hasSuggestions) return;
+      event.preventDefault();
+      setTagHighlightIndex((index) => Math.min(index + 1, tagSuggestions.length - 1));
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      if (!hasSuggestions) return;
+      event.preventDefault();
+      setTagHighlightIndex((index) => Math.max(index - 1, -1));
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (hasSuggestions && tagHighlightIndex >= 0) {
+        addTag(tagSuggestions[tagHighlightIndex]);
+      } else {
+        addTag();
+      }
+      return;
+    }
+
+    if (event.key === 'Escape' && tagMenuOpen) {
+      event.preventDefault();
+      setTagMenuOpen(false);
+      setTagHighlightIndex(-1);
+    }
   };
 
   const removeTag = (tag: string) => {
@@ -787,14 +836,12 @@ export default function TwitchPresetsPage() {
                         setTagInput(e.target.value);
                       }}
                       onBlur={() => {
-                        window.setTimeout(() => setTagMenuOpen(false), 150);
+                        window.setTimeout(() => {
+                          setTagMenuOpen(false);
+                          setTagHighlightIndex(-1);
+                        }, 150);
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addTag();
-                        }
-                      }}
+                      onKeyDown={handleTagKeyDown}
                       maxLength={25}
                       disabled={form.tags.length >= 10 || !status?.connected}
                       placeholder={
@@ -808,14 +855,24 @@ export default function TwitchPresetsPage() {
                       <span className="absolute right-3 top-2.5 text-xs text-text-muted">…</span>
                     ) : null}
                     {tagMenuOpen && tagSuggestions.length > 0 ? (
-                      <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-surface bg-bg shadow-lg">
-                        {tagSuggestions.map((tag) => (
-                          <li key={tag}>
+                      <ul
+                        ref={tagListRef}
+                        role="listbox"
+                        className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-surface bg-bg shadow-lg"
+                      >
+                        {tagSuggestions.map((tag, index) => (
+                          <li key={tag} role="option" aria-selected={index === tagHighlightIndex}>
                             <button
                               type="button"
                               onMouseDown={(e) => e.preventDefault()}
+                              onMouseEnter={() => setTagHighlightIndex(index)}
                               onClick={() => addTag(tag)}
-                              className="w-full px-3 py-2 text-left text-sm hover:bg-surface-soft"
+                              className={
+                                'w-full px-3 py-2 text-left text-sm ' +
+                                (index === tagHighlightIndex
+                                  ? 'bg-accent/20 text-text'
+                                  : 'hover:bg-surface-soft')
+                              }
                             >
                               {tag}
                             </button>

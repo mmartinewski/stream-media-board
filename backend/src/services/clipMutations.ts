@@ -22,6 +22,11 @@ import {
 } from './stagingRegistry.js';
 import { generateSquareThumbnail, parseCropMeta } from './thumbnail.js';
 import { isValidTimeString, timeStringToSeconds } from './timeFormat.js';
+import {
+  assertStoredPathUnderDir,
+  resolveStoredMediaPath,
+  toStoredMediaPath,
+} from './storedMediaPaths.js';
 
 const MAX_CLIP_SECONDS = 300;
 const STAGING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -210,7 +215,12 @@ export async function createClipFromUpload(
       assertPathUnderDir(paths.mediaAudio, finalMp3);
       db.prepare(
         `UPDATE clips SET thumbnail_original_path = ?, thumbnail_cropped_path = ?, audio_path = ? WHERE id = ?`,
-      ).run(finalOrig, finalCrop, finalMp3, id);
+      ).run(
+        toStoredMediaPath(paths, finalOrig),
+        toStoredMediaPath(paths, finalCrop),
+        toStoredMediaPath(paths, finalMp3),
+        id,
+      );
       setClipCategories(
         db,
         id,
@@ -317,7 +327,12 @@ async function createVideoClipFromUpload(
       assertPathUnderDir(paths.mediaVideo, finalMp4);
       db.prepare(
         `UPDATE clips SET thumbnail_original_path = ?, thumbnail_cropped_path = ?, video_path = ? WHERE id = ?`,
-      ).run(finalOrig, finalCrop, finalMp4, id);
+      ).run(
+        toStoredMediaPath(paths, finalOrig),
+        toStoredMediaPath(paths, finalCrop),
+        toStoredMediaPath(paths, finalMp4),
+        id,
+      );
       setClipCategories(
         db,
         id,
@@ -445,6 +460,11 @@ export async function updateClipFromUpload(
     throw new HttpError(404, 'Clip not found.', 'clip_not_found');
   }
 
+  const existingOrig = resolveStoredMediaPath(paths, row.thumbnail_original_path);
+  const existingCrop = resolveStoredMediaPath(paths, row.thumbnail_cropped_path);
+  const existingAudio = resolveStoredMediaPath(paths, row.audio_path);
+  const existingVideo = row.video_path ? resolveStoredMediaPath(paths, row.video_path) : null;
+
   const meta = readStagingMeta(paths.mediaTemp, input.processId);
   if (!meta || stagingMetaExpired(meta, STAGING_TTL_MS)) {
     throw new HttpError(400, 'Invalid process_id or expired staging.', 'invalid_process_id');
@@ -454,7 +474,13 @@ export async function updateClipFromUpload(
     if (clipType !== 'video' || row.clip_type !== 'video' || meta.mediaKind !== 'video') {
       throw new HttpError(400, 'Video clip type mismatch.', 'invalid_clip_type');
     }
-    await updateVideoClipFromUpload(db, paths, clipId, input, meta, row);
+    await updateVideoClipFromUpload(db, paths, clipId, input, meta, {
+      thumbnail_original_path: existingOrig,
+      thumbnail_cropped_path: existingCrop,
+      thumbnail_crop_meta: row.thumbnail_crop_meta,
+      video_path: existingVideo,
+      default_layout_area_id: row.default_layout_area_id,
+    });
     return;
   }
   if (meta.mediaKind === 'video') {
@@ -482,8 +508,8 @@ export async function updateClipFromUpload(
     throw new HttpError(502, 'Failed to trim/encode the audio.', 'ffmpeg_failed');
   }
 
-  let newOrig = row.thumbnail_original_path;
-  let newCrop = row.thumbnail_cropped_path;
+  let newOrig = existingOrig;
+  let newCrop = existingCrop;
   let cropMetaOut = row.thumbnail_crop_meta ?? '';
 
   if (input.thumbnailBuffer && input.thumbnailBuffer.length > 0) {
@@ -516,8 +542,8 @@ export async function updateClipFromUpload(
       throw err;
     }
     cleanupQuiet(pathsExceptExistingTargets([
-      row.thumbnail_original_path,
-      row.thumbnail_cropped_path,
+      existingOrig,
+      existingCrop,
     ], [newOrig, newCrop]));
   } else if (input.cropJson) {
     const parsed = parseCropMeta(input.cropJson);
@@ -525,13 +551,13 @@ export async function updateClipFromUpload(
       const tmpCrop = join(paths.mediaThumbnails, `tmp_put_${input.processId}_re.jpg`);
       try {
         const applied = await generateSquareThumbnail(
-          row.thumbnail_original_path,
+          existingOrig,
           tmpCrop,
           parsed,
         );
         cropMetaOut = JSON.stringify(applied);
         try {
-          unlinkSync(row.thumbnail_cropped_path);
+          unlinkSync(existingCrop);
         } catch {
           /* noop */
         }
@@ -551,7 +577,7 @@ export async function updateClipFromUpload(
     cleanupQuiet([tmpMp3]);
     throw err;
   }
-  cleanupQuiet(pathsExceptExistingTargets([row.audio_path], [finalMp3]));
+  cleanupQuiet(pathsExceptExistingTargets([existingAudio], [finalMp3]));
 
   const categories = resolveCategoriesOrThrow(db, input.categoryNames);
   const tagsNorm = input.tags.trim().length ? input.tags.trim() : null;
@@ -568,10 +594,10 @@ export async function updateClipFromUpload(
     input.startTime.trim(),
     input.endTime.trim(),
     tagsNorm,
-    newOrig,
-    newCrop,
+    toStoredMediaPath(paths, newOrig),
+    toStoredMediaPath(paths, newCrop),
     cropMetaOut || null,
-    finalMp3,
+    toStoredMediaPath(paths, finalMp3),
     clampVolume(input.volume),
     input.audioNormalize ? 1 : 0,
     0,
@@ -713,10 +739,10 @@ async function updateVideoClipFromUpload(
     input.startTime.trim(),
     input.endTime.trim(),
     tagsNorm,
-    newOrig,
-    newCrop,
+    toStoredMediaPath(paths, newOrig),
+    toStoredMediaPath(paths, newCrop),
     cropMetaOut || null,
-    finalMp4,
+    toStoredMediaPath(paths, finalMp4),
     defaultLayoutAreaId,
     clampVolume(input.volume),
     0,
@@ -736,21 +762,25 @@ async function updateVideoClipFromUpload(
   deleteStagingBundle(paths.mediaTemp, input.processId);
 }
 
-export function deleteClipFiles(row: {
-  thumbnail_original_path: string;
-  thumbnail_cropped_path: string;
-  audio_path: string;
-  video_path?: string | null;
-}): void {
-  for (const p of [
+export function deleteClipFiles(
+  paths: AppPaths,
+  row: {
+    thumbnail_original_path: string;
+    thumbnail_cropped_path: string;
+    audio_path: string;
+    video_path?: string | null;
+  },
+): void {
+  for (const stored of [
     row.thumbnail_original_path,
     row.thumbnail_cropped_path,
     row.audio_path,
     row.video_path ?? '',
   ]) {
-    if (!p) continue;
+    if (!stored) continue;
+    const absolute = resolveStoredMediaPath(paths, stored);
     try {
-      unlinkSync(p);
+      unlinkSync(absolute);
     } catch {
       /* noop */
     }
@@ -767,16 +797,16 @@ export function assertClipPathsBelongToApp(
     video_path?: string | null;
   },
 ): void {
-  assertPathUnderDir(paths.mediaThumbnails, row.thumbnail_original_path);
-  assertPathUnderDir(paths.mediaThumbnails, row.thumbnail_cropped_path);
+  assertStoredPathUnderDir(paths, paths.mediaThumbnails, row.thumbnail_original_path);
+  assertStoredPathUnderDir(paths, paths.mediaThumbnails, row.thumbnail_cropped_path);
   if (row.clip_type === 'video') {
     if (!row.video_path) {
       throw new HttpError(404, 'Video file not found.', 'video_missing');
     }
-    assertPathUnderDir(paths.mediaVideo, row.video_path);
+    assertStoredPathUnderDir(paths, paths.mediaVideo, row.video_path);
     return;
   }
   if (row.audio_path) {
-    assertPathUnderDir(paths.mediaAudio, row.audio_path);
+    assertStoredPathUnderDir(paths, paths.mediaAudio, row.audio_path);
   }
 }

@@ -31,6 +31,7 @@ import {
   parseOptionalLayoutAreaId,
 } from '../db/repositories/layoutAreas.js';
 import { stageExistingAudio, stageExistingVideo } from './prefetch.js';
+import { resolveStoredMediaPath } from '../services/storedMediaPaths.js';
 
 interface SectionFavorites {
   type: 'favorites';
@@ -243,7 +244,8 @@ export function clipsRouter(): Router {
         throw new HttpError(400, 'This clip is a video overlay, not audio.', 'clip_is_video');
       }
       assertClipPathsBelongToApp(paths, row);
-      if (!existsSync(row.audio_path)) {
+      const audioPath = resolveStoredMediaPath(paths, row.audio_path);
+      if (!existsSync(audioPath)) {
         throw new HttpError(404, 'Audio file not found.', 'audio_missing');
       }
       res.setHeader('Content-Type', 'audio/mpeg');
@@ -252,10 +254,10 @@ export function clipsRouter(): Router {
         req.query.download === 'true' ||
         String(req.query.download ?? '').toLowerCase() === 'yes';
       if (asDownload) {
-        res.download(row.audio_path, `${toDownloadFilename(row.title)}.mp3`);
+        res.download(audioPath, `${toDownloadFilename(row.title)}.mp3`);
         return;
       }
-      res.sendFile(row.audio_path);
+      res.sendFile(audioPath);
     } catch (err) {
       next(err);
     }
@@ -273,7 +275,8 @@ export function clipsRouter(): Router {
         throw new HttpError(400, 'This clip is not a video overlay.', 'clip_is_audio');
       }
       assertClipPathsBelongToApp(paths, row);
-      if (!row.video_path || !existsSync(row.video_path)) {
+      const videoPath = row.video_path ? resolveStoredMediaPath(paths, row.video_path) : '';
+      if (!videoPath || !existsSync(videoPath)) {
         throw new HttpError(404, 'Video file not found.', 'video_missing');
       }
       res.setHeader('Content-Type', 'video/mp4');
@@ -283,10 +286,10 @@ export function clipsRouter(): Router {
         req.query.download === 'true' ||
         String(req.query.download ?? '').toLowerCase() === 'yes';
       if (asDownload) {
-        res.download(row.video_path, `${toDownloadFilename(row.title)}.mp4`);
+        res.download(videoPath, `${toDownloadFilename(row.title)}.mp4`);
         return;
       }
-      res.sendFile(row.video_path);
+      res.sendFile(videoPath);
     } catch (err) {
       next(err);
     }
@@ -484,7 +487,11 @@ export function clipsRouter(): Router {
           throw new HttpError(400, 'Use stage-video for video clips.', 'clip_is_video');
         }
         assertClipPathsBelongToApp(paths, row);
-        const response = await stageExistingAudio(paths, row.audio_path, row.title);
+        const response = await stageExistingAudio(
+          paths,
+          resolveStoredMediaPath(paths, row.audio_path),
+          row.title,
+        );
         res.json(response);
       } catch (err) {
         next(err);
@@ -505,7 +512,11 @@ export function clipsRouter(): Router {
           throw new HttpError(400, 'Clip is not a video overlay.', 'clip_is_audio');
         }
         assertClipPathsBelongToApp(paths, row);
-        const response = await stageExistingVideo(paths, row.video_path, row.title);
+        const response = await stageExistingVideo(
+          paths,
+          resolveStoredMediaPath(paths, row.video_path),
+          row.title,
+        );
         res.json(response);
       } catch (err) {
         next(err);
@@ -522,7 +533,7 @@ export function clipsRouter(): Router {
         throw new HttpError(404, 'Clip not found.', 'clip_not_found');
       }
       assertClipPathsBelongToApp(paths, row);
-      deleteClipFiles(row);
+      deleteClipFiles(paths, row);
       deleteClipById(db, id);
       res.json({ status: 'deleted', id });
     } catch (err) {

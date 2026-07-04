@@ -29,7 +29,10 @@ export async function startBackendServer(): Promise<BackendServer> {
   logger.info(`resolved port: ${port}`);
 
   const db = getDb(paths.databaseFile);
-  migrate(db);
+  const migratedPaths = migrate(db, paths);
+  if (migratedPaths > 0) {
+    logger.info(`stored media paths normalized: ${migratedPaths} row(s)`);
+  }
   logger.info('SQLite migrations applied');
 
   const backfilled = await backfillVideoClipMetadata(db, paths);

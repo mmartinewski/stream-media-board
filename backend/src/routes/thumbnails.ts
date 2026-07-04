@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import type { AppPaths } from '../config/paths.js';
 import { getDb } from '../db/connection.js';
 import { getClipById } from '../db/repositories/clips.js';
 import { HttpError } from '../middleware/errorHandler.js';
+import { assertStoredPathUnderDir } from '../services/storedMediaPaths.js';
 
 const MAX_THUMBNAIL_BYTES = 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -25,16 +25,11 @@ export function thumbnailsRouter(paths: AppPaths): Router {
         if (!row) {
           throw new HttpError(404, 'Clip not found.', 'clip_not_found');
         }
-        const filePath =
+        const stored =
           kind === 'original'
             ? row.thumbnail_original_path
             : row.thumbnail_cropped_path;
-        const resolved = resolve(filePath);
-        const base = resolve(paths.mediaThumbnails);
-        const rel = relative(base, resolved);
-        if (rel.startsWith('..') || rel.includes('..')) {
-          throw new HttpError(500, 'Invalid thumbnail path.', 'path_safety');
-        }
+        const resolved = assertStoredPathUnderDir(paths, paths.mediaThumbnails, stored);
         if (!existsSync(resolved)) {
           throw new HttpError(404, 'Thumbnail not found.', 'thumb_missing');
         }

@@ -1,4 +1,6 @@
 import type { Database as BetterDatabase } from 'better-sqlite3';
+import type { AppPaths } from '../config/paths.js';
+import { migrateStoredMediaPaths } from '../services/storedMediaPaths.js';
 import {
   ensureLayoutAreasSchema,
   seedLayoutAreasIfEmpty,
@@ -57,7 +59,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
 INSERT OR IGNORE INTO app_settings(key, value) VALUES ('playback_volume', '75');
 `;
 
-export function migrate(db: BetterDatabase): void {
+export function migrate(db: BetterDatabase, paths: AppPaths): number {
   db.exec(SCHEMA_DDL);
   ensureColumn(db, 'clips', 'volume', 'INTEGER NOT NULL DEFAULT 75');
   ensureColumn(db, 'clips', 'audio_normalize', 'INTEGER NOT NULL DEFAULT 0');
@@ -80,6 +82,7 @@ export function migrate(db: BetterDatabase): void {
   ensureColumn(db, 'categories', 'thumbnail_original_path', 'TEXT');
   ensureColumn(db, 'categories', 'thumbnail_cropped_path', 'TEXT');
   ensureColumn(db, 'categories', 'thumbnail_crop_meta', 'TEXT');
+  return migrateStoredMediaPaths(db, paths);
 }
 
 function migrateClipCategories(db: BetterDatabase): void {

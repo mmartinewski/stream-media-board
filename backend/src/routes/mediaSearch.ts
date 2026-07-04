@@ -49,6 +49,7 @@ import {
   resolveCachedMediaSearchResult,
 } from '../services/mediaSearchCacheStore.js';
 import { resolveLayoutAreaForMediaSearch } from '../services/layoutAreaResolveMediaSearch.js';
+import { resolveStoredMediaPath } from '../services/storedMediaPaths.js';
 import { deriveVideoOrientation } from '../services/videoOrientation.js';
 import type { MediaSearchResult } from '../services/mediaSearchTypes.js';
 import type { MediaSearchCacheRow } from '../db/repositories/mediaSearchCache.js';
@@ -327,7 +328,7 @@ export function mediaSearchRouter(): Router {
         }
         res.setHeader('Content-Type', resolveCacheMediaContentType(row));
         res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-        res.sendFile(row.media_path);
+        res.sendFile(resolveStoredMediaPath(paths, row.media_path));
       } catch (err) {
         next(err);
       }
@@ -342,18 +343,22 @@ export function mediaSearchRouter(): Router {
         const provider = parseMediaSearchProvider(req.params.provider);
         const externalId = parseMediaSearchExternalId(provider, req.params.external_id);
         const row = getMediaSearchCacheEntry(db, provider, externalId);
-        if (!row?.preview_path || !existsSync(row.preview_path)) {
-          if (row && existsSync(row.media_path)) {
+        const mediaPath = row ? resolveStoredMediaPath(paths, row.media_path) : '';
+        const previewPath = row?.preview_path
+          ? resolveStoredMediaPath(paths, row.preview_path)
+          : '';
+        if (!row?.preview_path || !existsSync(previewPath)) {
+          if (row && existsSync(mediaPath)) {
             res.setHeader('Content-Type', resolveCacheMediaContentType(row));
             res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-            res.sendFile(row.media_path);
+            res.sendFile(mediaPath);
             return;
           }
           throw new HttpError(404, 'Cached preview not found.', 'media_cache_preview_not_found');
         }
         res.setHeader('Content-Type', resolveCachePreviewContentType(row.preview_path));
         res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-        res.sendFile(row.preview_path);
+        res.sendFile(previewPath);
       } catch (err) {
         next(err);
       }
