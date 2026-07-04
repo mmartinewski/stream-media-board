@@ -144,6 +144,10 @@ export interface AlertTriggerRow {
   trigger: AlertMediaTriggerBinding | null;
 }
 
+export interface AlertTriggersResponse {
+  triggers: AlertTriggerRow[];
+}
+
 export interface AlertTriggerTestResponse {
   status: string;
   kind: AlertKind;
