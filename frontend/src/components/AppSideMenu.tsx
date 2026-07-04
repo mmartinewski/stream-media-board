@@ -26,6 +26,12 @@ const NAV_ITEMS: ReadonlyArray<{
     icon: <GifsIcon className={NAV_ICON_CLASS} />,
   },
   {
+    to: '/settings/alert-triggers',
+    label: 'Alertas',
+    end: false,
+    icon: <AlertsIcon className={NAV_ICON_CLASS} />,
+  },
+  {
     to: '/settings/twitch-presets',
     label: 'Twitch presets',
     end: false,
@@ -203,6 +209,24 @@ function TwitchIcon({ className }: { className?: string }) {
     <svg aria-hidden="true" viewBox="0 0 20 20" className={className} fill="currentColor">
       <path d="M4 3 2 6.5v9h3v3l3.5-3H13L18 11V3H4zm12 6.5-2.5 2.5h-3L8 15v-2.5H5.5V4.5H16v5z" />
       <path d="M12.5 6.5h1.5v4h-1.5zm-3 0H11v4H9.5z" />
+    </svg>
+  );
+}
+
+function AlertsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    >
+      <path d="M10 3.5a4.5 4.5 0 0 1 4.5 4.5v2.8l1.2 2.4H4.3l1.2-2.4V8a4.5 4.5 0 0 1 4.5-4.5z" />
+      <path d="M8.5 15.5a1.5 1.5 0 0 0 3 0" />
     </svg>
   );
 }

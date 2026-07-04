@@ -21,6 +21,7 @@ import { twitchIntegrationRouter } from './routes/twitchIntegration.js';
 import { twitchWebhookRouter } from './routes/twitchWebhook.js';
 import { streamerBotWebhookRouter } from './routes/streamerBotWebhook.js';
 import { alertsRouter } from './routes/alerts.js';
+import { alertTriggersRouter } from './routes/alertTriggers.js';
 import { logger } from './lib/logger.js';
 import type { AppPaths } from './config/paths.js';
 
@@ -49,6 +50,7 @@ export function createApp(paths: AppPaths): Express {
   app.use('/api/webhooks/twitch', twitchWebhookRouter());
   app.use('/api/webhooks/streamerbot', streamerBotWebhookRouter());
   app.use('/api/alerts', alertsRouter());
+  app.use('/api/alerts/triggers', alertTriggersRouter());
 
   if (existsSync(paths.frontendDist)) {
     app.use(express.static(paths.frontendDist));

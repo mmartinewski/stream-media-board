@@ -1,3 +1,5 @@
+import { resolvePaths } from '../config/paths.js';
+import { getDb } from '../db/connection.js';
 import {
   buildAlertMessage,
   DEFAULT_ALERT_DURATION_SEC,
@@ -6,6 +8,7 @@ import {
 } from './alertTemplates.js';
 import type { AlertDto } from './alertsHub.js';
 import { enqueueAlert } from './alertsHub.js';
+import { playAlertMediaTrigger } from './alertMediaTriggerPlayback.js';
 import {
   normalizeStreamerBotPayload,
   resolveStreamerBotEventType,
@@ -62,6 +65,10 @@ export function processStreamerBotWebhook(body: unknown): AlertDto | null {
     level: vars.level,
   };
   if (vars.message) variables.message = vars.message;
+
+  const paths = resolvePaths();
+  const db = getDb(paths.databaseFile);
+  playAlertMediaTrigger(paths, db, built.kind as AlertKind);
 
   return enqueueAlert({
     kind: built.kind as AlertKind,

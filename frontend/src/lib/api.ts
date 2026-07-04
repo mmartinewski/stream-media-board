@@ -104,6 +104,59 @@ export interface PlayClipResponse {
   playback: 'browser_source' | 'local';
   connected_clients?: number;
   warnings?: string[];
+  clip_id?: number;
+  clip_type?: ClipType;
+}
+
+export type AlertKind =
+  | 'follow'
+  | 'sub'
+  | 'sub_prime'
+  | 'resub'
+  | 'gift_sub'
+  | 'gift_bomb'
+  | 'pay_it_forward'
+  | 'gift_paid_upgrade'
+  | 'prime_paid_upgrade'
+  | 'cheer'
+  | 'raid'
+  | 'channel_points'
+  | 'hype_train_start'
+  | 'hype_train_level'
+  | 'hype_train_end';
+
+export interface AlertMediaTriggerBinding {
+  media_source: 'clip' | 'gif';
+  clip_id?: number;
+  gif_provider?: MediaSearchProvider;
+  gif_external_id?: string;
+  title: string;
+  thumbnail_url?: string;
+  clip_type?: ClipType;
+  is_animated?: boolean;
+  updated_at: string;
+}
+
+export interface AlertTriggerRow {
+  kind: AlertKind;
+  label: string;
+  icon: string;
+  trigger: AlertMediaTriggerBinding | null;
+}
+
+export interface AlertTriggerTestResponse {
+  status: string;
+  kind: AlertKind;
+  playback: {
+    status: string;
+    playback: 'browser_source';
+    connected_clients: number;
+    clip_id?: number;
+    clip_type?: ClipType;
+    provider?: MediaSearchProvider;
+    external_id?: string;
+    is_animated?: boolean;
+  };
 }
 
 export interface LayoutAreaDto {
@@ -802,6 +855,28 @@ export const api = {
   applyTwitchPreset: (id: number) =>
     request<{ ok: true; preset: TwitchStreamPreset }>(
       `/api/integrations/twitch/presets/${id}/apply`,
+      { method: 'POST' },
+    ),
+  getAlertTriggers: () => request<AlertTriggersResponse>('/api/alerts/triggers'),
+  setAlertTrigger: (
+    kind: AlertKind,
+    body:
+      | { media_source: 'clip'; clip_id: number }
+      | { media_source: 'gif'; gif_provider: MediaSearchProvider; gif_external_id: string },
+  ) =>
+    request<AlertTriggerRow>(`/api/alerts/triggers/${encodeURIComponent(kind)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  deleteAlertTrigger: (kind: AlertKind) =>
+    request<{ status: string; kind: AlertKind }>(
+      `/api/alerts/triggers/${encodeURIComponent(kind)}`,
+      { method: 'DELETE' },
+    ),
+  testAlertTrigger: (kind: AlertKind) =>
+    request<{ status: string; kind: AlertKind; playback: unknown }>(
+      `/api/alerts/triggers/${encodeURIComponent(kind)}/test`,
       { method: 'POST' },
     ),
 };

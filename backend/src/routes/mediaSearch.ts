@@ -7,15 +7,9 @@ import {
   getGiphyIntegrationSettings,
 } from '../db/repositories/mediaSearchSettings.js';
 import { parseOptionalLayoutAreaId } from '../db/repositories/layoutAreas.js';
-import { getPlaybackVolume } from '../db/repositories/settings.js';
 import { searchMediaSearchCache, getMediaSearchCacheEntry, getMediaSearchCacheMetadata, updateMediaSearchCacheMetadata, updateMediaSearchCacheUserTags } from '../db/repositories/mediaSearchCache.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { mediaGifImportMultipart } from '../middleware/multipart.js';
-import {
-  browserSourceClientsForEvent,
-  publishBrowserSourceEvent,
-  publishBrowserSourceStopAll,
-} from '../services/browserSourceHub.js';
 import {
   fetchGiphyGifById,
   parseGiphyAnalyticsUrl,
@@ -48,55 +42,9 @@ import {
   resolveCachePreviewContentType,
   resolveCachedMediaSearchResult,
 } from '../services/mediaSearchCacheStore.js';
-import { resolveLayoutAreaForMediaSearch } from '../services/layoutAreaResolveMediaSearch.js';
+import { playMediaSearchById } from '../services/mediaSearchPlayback.js';
 import { resolveStoredMediaPath } from '../services/storedMediaPaths.js';
-import { deriveVideoOrientation } from '../services/videoOrientation.js';
 import type { MediaSearchResult } from '../services/mediaSearchTypes.js';
-import type { MediaSearchCacheRow } from '../db/repositories/mediaSearchCache.js';
-import type { GiphyIntegrationSettingsPublic } from '../services/mediaSearchTypes.js';
-import type { LayoutAreaDto } from '../services/layoutAreaTypes.js';
-
-function buildMediaSearchPlayEvent(
-  gif: MediaSearchResult,
-  cacheRow: MediaSearchCacheRow | null,
-  integration: GiphyIntegrationSettingsPublic,
-  playbackVolume: number,
-  layoutArea: LayoutAreaDto,
-  orientation: ReturnType<typeof deriveVideoOrientation>,
-) {
-  const mediaKind = cacheRow?.media_kind ?? (gif.isAnimated ? 'video' : 'image');
-
-  if (mediaKind === 'video') {
-    return {
-      type: 'play' as const,
-      mediaKind: 'video' as const,
-      mediaUrl: gif.playUrl,
-      playbackVolume,
-      width: gif.width,
-      height: gif.height,
-      orientation,
-      layoutArea,
-      minimumDisplaySec: integration.minimum_display_seconds,
-    };
-  }
-
-  const displayDurationSec =
-    gif.isAnimated
-      ? integration.minimum_display_seconds
-      : integration.static_display_seconds;
-
-  return {
-    type: 'play' as const,
-    mediaKind: 'image' as const,
-    mediaUrl: gif.playUrl,
-    playbackVolume,
-    width: gif.width,
-    height: gif.height,
-    orientation,
-    layoutArea,
-    displayDurationSec,
-  };
-}
 
 export function mediaSearchRouter(): Router {
   const router = Router();
@@ -435,72 +383,16 @@ export function mediaSearchRouter(): Router {
 
         const provider = parseMediaSearchProvider(body.provider);
         const externalId = parseMediaSearchExternalId(provider, body.external_id);
-        const integration = getGiphyIntegrationSettings(db);
-        const playbackVolume = getPlaybackVolume(db);
-
-        const existingRow = getMediaSearchCacheEntry(db, provider, externalId);
-        if (existingRow && cacheEntryHasValidFiles(paths, existingRow)) {
-          await ensureCachedMediaReadyForPlay(paths, db, provider, externalId);
-        }
-
-        let gif = resolveCachedMediaSearchResult(paths, db, provider, externalId);
-        const cached = gif !== null;
-        let cacheRow = getMediaSearchCacheEntry(db, provider, externalId);
-
-        if (!gif) {
-          if (provider === 'imported') {
-            throw new HttpError(404, 'Imported GIF not found.', 'media_cache_not_found');
-          }
-
-          const { apiKey, rating, customerId } = assertGiphySearchReady(db);
-          const remote = await fetchGiphyGifById({
-            apiKey,
-            gifId: externalId,
-            rating,
-            customerId,
-          });
-          await persistMediaSearchResultToCache(paths, db, remote);
-          gif = resolveCachedMediaSearchResult(paths, db, provider, externalId);
-          cacheRow = getMediaSearchCacheEntry(db, provider, externalId);
-          if (!gif) {
-            throw new HttpError(
-              502,
-              'Could not prepare cached media for playback.',
-              'media_cache_prepare_failed',
-            );
-          }
-        }
-
         const requestedLayoutAreaId = parseOptionalLayoutAreaId(body.layout_area_id);
-        const layoutArea = resolveLayoutAreaForMediaSearch(
+
+        const result = await playMediaSearchById(
+          paths,
           db,
-          requestedLayoutAreaId,
-          gif.width,
-          gif.height,
-        );
-        const orientation = deriveVideoOrientation(gif.width, gif.height);
-
-        publishBrowserSourceStopAll();
-
-        const playEvent = buildMediaSearchPlayEvent(
-          gif,
-          cacheRow,
-          integration,
-          playbackVolume,
-          layoutArea,
-          orientation,
-        );
-
-        publishBrowserSourceEvent(playEvent);
-        res.json({
-          status: 'playing',
-          playback: 'browser_source',
-          connected_clients: browserSourceClientsForEvent(playEvent),
           provider,
-          external_id: externalId,
-          is_animated: gif.isAnimated,
-          cached,
-        });
+          externalId,
+          requestedLayoutAreaId,
+        );
+        res.json(result);
       } catch (err) {
         next(err);
       }

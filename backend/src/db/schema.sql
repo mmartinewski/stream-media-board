@@ -66,3 +66,12 @@ CREATE TABLE IF NOT EXISTS twitch_stream_presets (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS alert_media_triggers (
+    alert_kind TEXT PRIMARY KEY,
+    media_source TEXT NOT NULL CHECK (media_source IN ('clip', 'gif')),
+    clip_id INTEGER REFERENCES clips(id) ON DELETE SET NULL,
+    gif_provider TEXT,
+    gif_external_id TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
