@@ -73,6 +73,9 @@ Filename: "{app}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [Code]
+const
+  SW_SHOWDEFAULT = 10;
+
 var
   SilentRelaunchAfterInstall: Boolean;
 
