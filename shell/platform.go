@@ -19,15 +19,23 @@ const errorAlreadyExists = 183
 var procCreateMutexW = kernel32.NewProc("CreateMutexW")
 
 // acquireSingleInstance creates a named mutex. Returns true if this is the first
-// instance, false if another instance already holds it.
+// instance, false if another instance already holds it. Retries briefly so a
+// silent installer relaunch can wait for the previous process to exit.
 func acquireSingleInstance() bool {
 	namePtr, err := windows.UTF16PtrFromString(mutexName)
 	if err != nil {
 		return true
 	}
-	_, _, callErr := procCreateMutexW.Call(0, 0, uintptr(unsafe.Pointer(namePtr)))
-	if errno, ok := callErr.(windows.Errno); ok && int(errno) == errorAlreadyExists {
-		return false
+	for attempt := 0; attempt < 6; attempt++ {
+		_, _, callErr := procCreateMutexW.Call(0, 0, uintptr(unsafe.Pointer(namePtr)))
+		if errno, ok := callErr.(windows.Errno); ok && int(errno) == errorAlreadyExists {
+			if attempt < 5 {
+				time.Sleep(500 * time.Millisecond)
+				continue
+			}
+			return false
+		}
+		return true
 	}
 	return true
 }

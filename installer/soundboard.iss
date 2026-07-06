@@ -71,13 +71,35 @@ Root: HKCU; Subkey: "Software\Classes\soundboard\shell\open\command"; ValueType:
 [Run]
 Filename: "{app}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; Check: NeedsWebView2; StatusMsg: "Installing the WebView2 runtime (required for YouTube sign-in)..."; Flags: waituntilterminated skipifdoesntexist
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
-; Silent auto-update relaunch: the shell invokes Setup with /autoupdate=1. The
-; entry above is skipped in silent mode (skipifsilent), so this separate,
-; unconditional entry (gated only by IsAutoUpdateRelaunch) is what brings the
-; app back up after an in-app update.
-Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: IsAutoUpdateRelaunch
 
 [Code]
+var
+  SilentRelaunchAfterInstall: Boolean;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    SilentRelaunchAfterInstall := WizardSilent;
+end;
+
+// Relaunch after any successful silent install (/VERYSILENT), including in-app
+// auto-update (/autoupdate=1) and manual silent upgrades. The interactive
+// "Launch" [Run] entry above is skipped when silent (skipifsilent).
+procedure DeinitializeSetup();
+var
+  ResultCode: Integer;
+  ExePath: String;
+begin
+  if not SilentRelaunchAfterInstall then
+    Exit;
+  ExePath := ExpandConstant('{app}\{#MyAppExeName}');
+  if not FileExists(ExePath) then
+    Exit;
+  // Brief pause so the previous instance can release AppMutex before we start.
+  Sleep(2000);
+  Exec(ExePath, '', ExpandConstant('{app}'), SW_SHOWDEFAULT, ewNoWait, ResultCode);
+end;
+
 function WebView2Installed(): Boolean;
 var
   v: String;
@@ -91,13 +113,4 @@ end;
 function NeedsWebView2(): Boolean;
 begin
   Result := not WebView2Installed() and FileExists(ExpandConstant('{app}\MicrosoftEdgeWebview2Setup.exe'));
-end;
-
-// True when Setup was invoked with /autoupdate=1 (set by the in-app updater
-// in shell/updater.go's ApplyUpdate). Used to relaunch the app after a fully
-// silent install, since the interactive "Launch" entry above never runs
-// during /VERYSILENT (skipifsilent).
-function IsAutoUpdateRelaunch(): Boolean;
-begin
-  Result := ExpandConstant('{param:autoupdate|0}') = '1';
 end;

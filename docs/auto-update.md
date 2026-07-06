@@ -33,8 +33,8 @@ works independently of the backend's health.
   never downloaded silently in the background).
 - **Apply**: confirm dialog → stop backend → spawn the downloaded installer with
   `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /autoupdate=1 /LOG=...` → shell exits
-  (`systray.Quit()` + `os.Exit(0)`) → Inno Setup replaces files in place (same `AppId`) → the
-  `IsAutoUpdateRelaunch`-gated `[Run]` entry relaunches `StreamMediaBoard.exe`.
+  (`systray.Quit()` + `os.Exit(0)`) → Inno Setup replaces files in place (same `AppId`) →
+  `DeinitializeSetup` relaunches `StreamMediaBoard.exe` after a short pause.
 - **Dev-safe**: the whole feature is gated on `paths.isPackaged` (presence of `unins000.exe`, created
   only by Inno Setup). Dev/manual runs of the shell never hit the network for this and show
   "(unavailable in dev)" on the menu item.
@@ -58,7 +58,7 @@ sequenceDiagram
     Tray->>Setup: spawn "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS /autoupdate=1 /LOG=..."
     Tray->>Tray: systray.Quit() + os.Exit(0) (releases file lock)
     Setup->>Setup: replace files in {app} (AppId-based in-place upgrade)
-    Setup->>Tray: relaunch StreamMediaBoard.exe (custom Run entry, Check=IsAutoUpdateRelaunch)
+    Setup->>Tray: relaunch StreamMediaBoard.exe (DeinitializeSetup after silent install)
 ```
 
 ## Tray menu
@@ -100,7 +100,10 @@ sequenceDiagram
 - **Shell doesn't exit before Setup starts writing files** — mitigated by `AppMutex` (Setup's own
   detection) plus `/CLOSEAPPLICATIONS` (Restart Manager fallback).
 - **Silent installer needs to relaunch the app** — the default `[Run]` "Launch" entry is
-  `skipifsilent`; a separate `/autoupdate=1`-gated entry handles the silent-relaunch path.
+  `skipifsilent`; `DeinitializeSetup` in `soundboard.iss` relaunches after any successful
+  silent install (with a short pause so `AppMutex` is released first). The shell also retries
+  mutex acquisition briefly on startup so the post-install relaunch is not rejected as a
+  duplicate instance.
 - **Backend holds a file lock at update time** — reuses the existing, already-tested `backend.stop()`
   (kill + wait up to 5s) before spawning the installer.
 - **Unsigned installer / SmartScreen** — launched via `exec.Command` (`CreateProcess`-style, not
