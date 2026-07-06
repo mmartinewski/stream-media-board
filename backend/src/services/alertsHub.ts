@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import type { AlertKind } from './alertTemplates.js';
 import { DEFAULT_ALERT_DURATION_SEC } from './alertTemplates.js';
+import { resolveAlertDisplayDurationSec, playAlertMediaForShow } from './alertShowMedia.js';
 
 export interface AlertDto {
   id: string;
@@ -98,12 +99,28 @@ function scheduleHide(alert: AlertDto): void {
 }
 
 function processQueue(): void {
+  void processQueueAsync();
+}
+
+async function processQueueAsync(): Promise<void> {
   if (currentAlert !== null) return;
   const next = queue.shift();
   if (!next) return;
+
   currentAlert = next;
-  publishShow(next);
-  scheduleHide(next);
+
+  let displayDurationSec = next.durationSec;
+  try {
+    displayDurationSec = await resolveAlertDisplayDurationSec(next);
+  } catch {
+    displayDurationSec = next.durationSec;
+  }
+
+  const showAlert: AlertDto = { ...next, durationSec: displayDurationSec };
+  currentAlert = showAlert;
+  playAlertMediaForShow(showAlert);
+  publishShow(showAlert);
+  scheduleHide(showAlert);
 }
 
 export function enqueueAlert(alert: Omit<AlertDto, 'id'> & { id?: string }): AlertDto {

@@ -80,7 +80,6 @@ export default function AlertTriggersPage() {
   const [rows, setRows] = useState<AlertTriggerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [savingKind, setSavingKind] = useState<AlertKind | null>(null);
   const [testingKind, setTestingKind] = useState<AlertKind | null>(null);
   const [clipPickerKind, setClipPickerKind] = useState<AlertKind | null>(null);
@@ -93,7 +92,32 @@ export default function AlertTriggersPage() {
   const [debouncedGifSearch, setDebouncedGifSearch] = useState('');
   const [gifResults, setGifResults] = useState<MediaSearchResult[]>([]);
   const [gifSearchLoading, setGifSearchLoading] = useState(false);
-  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clipSearchInputRef = useRef<HTMLInputElement>(null);
+  const gifSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const openClipPicker = useCallback((kind: AlertKind) => {
+    setClipResults([]);
+    setClipSearch('');
+    setDebouncedClipSearch('');
+    setClipPickerKind(kind);
+  }, []);
+
+  const openGifPicker = useCallback((kind: AlertKind) => {
+    setGifResults([]);
+    setGifSearch('');
+    setDebouncedGifSearch('');
+    setGifPickerKind(kind);
+  }, []);
+
+  useEffect(() => {
+    if (!clipPickerKind) return;
+    clipSearchInputRef.current?.focus({ preventScroll: true });
+  }, [clipPickerKind]);
+
+  useEffect(() => {
+    if (!gifPickerKind) return;
+    gifSearchInputRef.current?.focus({ preventScroll: true });
+  }, [gifPickerKind]);
 
   const reload = useCallback(async () => {
     const res = await api.getAlertTriggers();
@@ -142,12 +166,6 @@ export default function AlertTriggersPage() {
       .finally(() => setGifSearchLoading(false));
   }, [gifPickerKind, debouncedGifSearch]);
 
-  const showSuccess = useCallback((message: string) => {
-    setSuccess(message);
-    if (successTimer.current) clearTimeout(successTimer.current);
-    successTimer.current = setTimeout(() => setSuccess(null), 3000);
-  }, []);
-
   const handleSaveClip = useCallback(
     async (kind: AlertKind, clip: ClipDto) => {
       setSavingKind(kind);
@@ -159,14 +177,13 @@ export default function AlertTriggersPage() {
         });
         setRows((prev) => prev.map((row) => (row.kind === kind ? updated : row)));
         setClipPickerKind(null);
-        showSuccess(`Gatilho salvo para ${updated.label}.`);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setSavingKind(null);
       }
     },
-    [showSuccess],
+    [],
   );
 
   const handleSaveGif = useCallback(
@@ -181,15 +198,53 @@ export default function AlertTriggersPage() {
         });
         setRows((prev) => prev.map((row) => (row.kind === kind ? updated : row)));
         setGifPickerKind(null);
-        showSuccess(`Gatilho salvo para ${updated.label}.`);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setSavingKind(null);
       }
     },
-    [showSuccess],
+    [],
   );
+
+  const submitClipPicker = useCallback(async () => {
+    if (!clipPickerKind || savingKind === clipPickerKind) return;
+    const query = clipSearch.trim();
+    setClipSearchLoading(true);
+    setError(null);
+    try {
+      const res = await api.getClips(query || undefined);
+      const clips = flattenClips(res.sections);
+      setClipResults(clips);
+      setDebouncedClipSearch(query);
+      const first = clips[0];
+      if (!first) return;
+      await handleSaveClip(clipPickerKind, first);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setClipSearchLoading(false);
+    }
+  }, [clipPickerKind, clipSearch, handleSaveClip, savingKind]);
+
+  const submitGifPicker = useCallback(async () => {
+    if (!gifPickerKind || savingKind === gifPickerKind) return;
+    const query = gifSearch.trim();
+    setGifSearchLoading(true);
+    setError(null);
+    try {
+      const res = await api.searchMedia({ q: query || undefined, local: true, limit: 30 });
+      setGifResults(res.results);
+      setDebouncedGifSearch(query);
+      const first = res.results[0];
+      if (!first) return;
+      await handleSaveGif(gifPickerKind, first);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGifSearchLoading(false);
+    }
+  }, [gifPickerKind, gifSearch, handleSaveGif, savingKind]);
 
   const handleRemove = useCallback(
     async (kind: AlertKind) => {
@@ -200,14 +255,13 @@ export default function AlertTriggersPage() {
         setRows((prev) =>
           prev.map((row) => (row.kind === kind ? { ...row, trigger: null } : row)),
         );
-        showSuccess('Gatilho removido.');
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setSavingKind(null);
       }
     },
-    [showSuccess],
+    [],
   );
 
   const handleTest = useCallback(async (kind: AlertKind) => {
@@ -215,13 +269,12 @@ export default function AlertTriggersPage() {
     setError(null);
     try {
       await api.testAlertTrigger(kind);
-      showSuccess('Mídia enviada para o overlay.');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setTestingKind(null);
     }
-  }, [showSuccess]);
+  }, []);
 
   const configuredCount = useMemo(
     () => rows.filter((row) => row.trigger != null).length,
@@ -248,11 +301,6 @@ export default function AlertTriggersPage() {
       {error ? (
         <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {error}
-        </p>
-      ) : null}
-      {success ? (
-        <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-          {success}
         </p>
       ) : null}
 
@@ -311,10 +359,7 @@ export default function AlertTriggersPage() {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => {
-                      setClipSearch('');
-                      setClipPickerKind(row.kind);
-                    }}
+                    onClick={() => openClipPicker(row.kind)}
                     className="rounded-md border border-surface px-3 py-1.5 text-xs font-medium text-text hover:border-accent hover:text-accent disabled:opacity-50"
                   >
                     Clip
@@ -322,10 +367,7 @@ export default function AlertTriggersPage() {
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => {
-                      setGifSearch('');
-                      setGifPickerKind(row.kind);
-                    }}
+                    onClick={() => openGifPicker(row.kind)}
                     className="rounded-md border border-surface px-3 py-1.5 text-xs font-medium text-text hover:border-accent hover:text-accent disabled:opacity-50"
                   >
                     GIF
@@ -359,13 +401,21 @@ export default function AlertTriggersPage() {
 
       {clipPickerKind ? (
         <PickerModal title="Escolher clip" onClose={() => setClipPickerKind(null)}>
-          <input
-            type="search"
-            value={clipSearch}
-            onChange={(event) => setClipSearch(event.target.value)}
-            placeholder="Buscar clips…"
-            className="mb-3 w-full rounded-md border border-surface bg-bg px-3 py-2 text-sm"
-          />
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitClipPicker();
+            }}
+          >
+            <input
+              ref={clipSearchInputRef}
+              type="search"
+              value={clipSearch}
+              onChange={(event) => setClipSearch(event.target.value)}
+              placeholder="Buscar clips…"
+              className="mb-3 w-full rounded-md border border-surface bg-bg px-3 py-2 text-sm"
+            />
+          </form>
           {clipSearchLoading ? (
             <p className="text-sm text-text-muted">Buscando…</p>
           ) : clipResults.length === 0 ? (
@@ -399,13 +449,21 @@ export default function AlertTriggersPage() {
 
       {gifPickerKind ? (
         <PickerModal title="Escolher GIF" onClose={() => setGifPickerKind(null)}>
-          <input
-            type="search"
-            value={gifSearch}
-            onChange={(event) => setGifSearch(event.target.value)}
-            placeholder="Buscar GIFs locais…"
-            className="mb-3 w-full rounded-md border border-surface bg-bg px-3 py-2 text-sm"
-          />
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitGifPicker();
+            }}
+          >
+            <input
+              ref={gifSearchInputRef}
+              type="search"
+              value={gifSearch}
+              onChange={(event) => setGifSearch(event.target.value)}
+              placeholder="Buscar GIFs locais…"
+              className="mb-3 w-full rounded-md border border-surface bg-bg px-3 py-2 text-sm"
+            />
+          </form>
           {gifSearchLoading ? (
             <p className="text-sm text-text-muted">Buscando…</p>
           ) : gifResults.length === 0 ? (
