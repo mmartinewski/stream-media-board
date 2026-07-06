@@ -59,7 +59,8 @@ function certArgs() {
     if (process.env.SIGN_CERT_PASSWORD) args.push('/p', process.env.SIGN_CERT_PASSWORD);
     return args;
   }
-  return ['/n', process.env.SIGN_CERT_NAME];
+  // /a lets signtool pick when multiple store certs share the same subject name.
+  return ['/a', '/n', process.env.SIGN_CERT_NAME];
 }
 
 /** Signs a single file with signtool (throws on failure). */
@@ -90,7 +91,7 @@ export function innoSignCommand() {
     cert = `/f ${q}${process.env.SIGN_CERT_FILE}${q}`;
     if (process.env.SIGN_CERT_PASSWORD) cert += ` /p ${process.env.SIGN_CERT_PASSWORD}`;
   } else {
-    cert = `/n ${q}${process.env.SIGN_CERT_NAME}${q}`;
+    cert = `/a /n ${q}${process.env.SIGN_CERT_NAME}${q}`;
   }
   return `${q}${tool}${q} sign /fd SHA256 /tr ${TIMESTAMP_URL} /td SHA256 ${cert} $f`;
 }
