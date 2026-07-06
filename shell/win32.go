@@ -57,6 +57,8 @@ const (
 	mbIconInfo         = 0x40
 	mbIconError        = 0x10
 	mbIconQuestion     = 0x00000020
+	mbSetForeground    = 0x00010000
+	mbTopmost          = 0x00040000
 	idOK               = 1
 	coinitApartment    = 0x2
 )
@@ -214,6 +216,7 @@ func runMessageLoop() {
 func messageBox(title, text string, flags uint32) {
 	titlePtr, _ := windows.UTF16PtrFromString(title)
 	textPtr, _ := windows.UTF16PtrFromString(text)
+	flags |= mbSetForeground | mbTopmost
 	_, _, _ = procMessageBoxW.Call(0, uintptr(unsafe.Pointer(textPtr)), uintptr(unsafe.Pointer(titlePtr)), uintptr(flags))
 }
 
@@ -227,7 +230,7 @@ func confirmBox(title, text string) bool {
 		0,
 		uintptr(unsafe.Pointer(textPtr)),
 		uintptr(unsafe.Pointer(titlePtr)),
-		uintptr(mbOKCancel|mbIconQuestion),
+		uintptr(mbOKCancel|mbIconQuestion|mbSetForeground|mbTopmost),
 	)
 	return int32(r) == idOK
 }

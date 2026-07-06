@@ -147,14 +147,23 @@ func refreshTrayMenu() {
 // and reports the outcome to the user. Always runs in its own goroutine so it
 // never blocks the tray's click-handling loop.
 func handleCheckForUpdatesClick() {
-	mCheckUpdate.Disable()
-	mCheckUpdate.SetTitle("Checking for updates…")
 	defer func() {
+		if recover() != nil {
+			writeShellLog(appPaths, "update: manual check panicked")
+		}
 		mCheckUpdate.SetTitle("Check for Updates")
 		mCheckUpdate.Enable()
 	}()
 
+	mCheckUpdate.Disable()
+	mCheckUpdate.SetTitle("Checking for updates…")
+
 	info, err := CheckForUpdate(appPaths, true)
+
+	// Restore the menu before any modal dialog. MessageBox blocks until dismissed;
+	// resetting only in a function-exit defer leaves the item stuck on "Checking…".
+	mCheckUpdate.SetTitle("Check for Updates")
+	mCheckUpdate.Enable()
 	if err != nil {
 		messageBox(
 			appName,
