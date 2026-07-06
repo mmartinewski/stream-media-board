@@ -91,3 +91,23 @@ export const ALERT_KIND_ICONS: Record<AlertKind, string> = {
   hype_train_end: '🎉',
   unknown: '✨',
 };
+
+/** Breve explicação de cada tipo de alerta (UI de gatilhos). */
+export const ALERT_KIND_DESCRIPTIONS: Record<AlertKind, string> = {
+  follow: 'Alguém segue o canal pela primeira vez.',
+  sub: 'Nova inscrição paga (Tier 1, 2 ou 3).',
+  sub_prime: 'Nova inscrição usando benefício Prime Gaming.',
+  resub: 'Viewer renova uma inscrição que já estava ativa.',
+  gift_sub: 'Alguém presenteia uma inscrição para outro viewer.',
+  gift_bomb: 'Alguém presenteia várias inscrições de uma vez.',
+  pay_it_forward: 'Viewer paga a inscrição em frente na cadeia de gifts.',
+  gift_paid_upgrade: 'Viewer renova a inscrição que tinha recebido de presente.',
+  prime_paid_upgrade: 'Viewer converte inscrição Prime em inscrição paga.',
+  cheer: 'Viewer envia bits, com ou sem mensagem no chat.',
+  raid: 'Outro canal redireciona viewers para a sua live.',
+  channel_points: 'Viewer resgata uma recompensa de pontos de canal.',
+  hype_train_start: 'Um Hype Train começa na live.',
+  hype_train_level: 'O Hype Train sobe de nível.',
+  hype_train_end: 'O Hype Train termina.',
+  unknown: 'Evento não reconhecido pelo app.',
+};

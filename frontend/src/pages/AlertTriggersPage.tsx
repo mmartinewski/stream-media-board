@@ -7,6 +7,8 @@ import {
   type ClipDto,
   type MediaSearchResult,
 } from '../lib/api';
+import AlertKindInfoTooltip from '../components/AlertKindInfoTooltip';
+import { ALERT_KIND_DESCRIPTIONS } from '../lib/alertsOverlay';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -270,6 +272,10 @@ export default function AlertTriggersPage() {
                       {row.icon}
                     </span>
                     <h2 className="text-sm font-semibold">{row.label}</h2>
+                    <AlertKindInfoTooltip
+                      tooltipId={`alert-kind-info-${row.kind}`}
+                      description={ALERT_KIND_DESCRIPTIONS[row.kind]}
+                    />
                   </div>
 
                   {trigger ? (
