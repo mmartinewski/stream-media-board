@@ -15,6 +15,9 @@
 #define MyAppExeName "StreamMediaBoard.exe"
 #define MyAppPublisher "mmartinewski"
 #define MyAppURL "https://github.com/mmartinewski/stream-media-board"
+; Must match mutexName in shell/config.go exactly - lets Setup detect (and, via
+; /CLOSEAPPLICATIONS, close) a still-running instance before replacing files.
+#define SetupMutexName "Global\StreamMediaBoardSingleInstance"
 
 [Setup]
 AppId={{8F2A1C34-5B6D-4E7F-9A0B-1C2D3E4F5A6B}
@@ -37,6 +40,7 @@ SetupIconFile=..\shell\assets\play.ico
 UninstallDisplayIcon={app}\app\shell-assets\play.ico
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+AppMutex={#SetupMutexName}
 
 ; Code signing is enabled only when build-installer-inno.mjs passes
 ; /DSIGN_TOOL=mysign together with /Smysign=<signtool command>.
@@ -67,6 +71,11 @@ Root: HKCU; Subkey: "Software\Classes\soundboard\shell\open\command"; ValueType:
 [Run]
 Filename: "{app}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; Check: NeedsWebView2; StatusMsg: "Installing the WebView2 runtime (required for YouTube sign-in)..."; Flags: waituntilterminated skipifdoesntexist
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
+; Silent auto-update relaunch: the shell invokes Setup with /autoupdate=1. The
+; entry above is skipped in silent mode (skipifsilent), so this separate,
+; unconditional entry (gated only by IsAutoUpdateRelaunch) is what brings the
+; app back up after an in-app update.
+Filename: "{app}\{#MyAppExeName}"; Flags: nowait; Check: IsAutoUpdateRelaunch
 
 [Code]
 function WebView2Installed(): Boolean;
@@ -82,4 +91,13 @@ end;
 function NeedsWebView2(): Boolean;
 begin
   Result := not WebView2Installed() and FileExists(ExpandConstant('{app}\MicrosoftEdgeWebview2Setup.exe'));
+end;
+
+// True when Setup was invoked with /autoupdate=1 (set by the in-app updater
+// in shell/updater.go's ApplyUpdate). Used to relaunch the app after a fully
+// silent install, since the interactive "Launch" entry above never runs
+// during /VERYSILENT (skipifsilent).
+function IsAutoUpdateRelaunch(): Boolean;
+begin
+  Result := ExpandConstant('{param:autoupdate|0}') = '1';
 end;

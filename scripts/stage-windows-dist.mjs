@@ -40,6 +40,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 const DIST = join(ROOT, 'dist-shell');
 const APP = join(DIST, 'app');
+const VERSION = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
 
 const args = process.argv.slice(2);
 const skipBuild = args.includes('--skip-build');
@@ -102,12 +103,13 @@ function buildShell() {
 
   // Build as CONSOLE first, then patch PE subsystem to WINDOWS. Some AV products
   // block go linker's temp a.out.exe when -H=windowsgui is used (Access is denied).
+  // -X main.appVersion embeds the release version, read by the in-app updater.
   run(
     'go',
     [
       'build',
       '-ldflags',
-      '-s -w',
+      `-s -w -X main.appVersion=${VERSION}`,
       '-o',
       exeOut,
       '.',
@@ -173,7 +175,7 @@ function stageProductionNodeModules() {
   const appPkg = {
     name: 'stream-media-board-app',
     private: true,
-    version: rootPkg.version,
+    version: VERSION,
     type: 'module',
     dependencies: rootPkg.dependencies,
   };

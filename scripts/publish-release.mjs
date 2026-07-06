@@ -16,10 +16,11 @@
  *   --skip-build        - do not run installer:win (publish:release sets this implicitly)
  */
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -147,6 +148,20 @@ function findInstallerExe(version) {
   return null;
 }
 
+// Computes the SHA256 of the installer and writes it next to it as
+// "<installer>.sha256" in the standard sha256sum format ("<hex>  <name>").
+// The in-app auto-updater (shell/updater.go) downloads this asset to verify
+// the installer's integrity before running it.
+function writeChecksumFile(installerPath) {
+  const data = readFileSync(installerPath);
+  const hash = createHash('sha256').update(data).digest('hex');
+  const checksumPath = `${installerPath}.sha256`;
+  const fileName = installerPath.split(/[\\/]/).pop();
+  writeFileSync(checksumPath, `${hash}  ${fileName}\n`);
+  console.log(`[publish] SHA256: ${hash}`);
+  return checksumPath;
+}
+
 function releaseExists(tag) {
   const result = spawnSync(ghExe, ['release', 'view', tag], {
     cwd: root,
@@ -194,6 +209,7 @@ function main() {
   }
 
   console.log(`[publish] Using installer: ${installerPath}`);
+  const checksumPath = writeChecksumFile(installerPath);
 
   const notes =
     process.env.RELEASE_NOTES?.trim() ||
@@ -204,14 +220,15 @@ function main() {
   const ghArgs = ['release'];
 
   if (releaseExists(tag)) {
-    console.log(`[publish] Release ${tag} exists — uploading asset (--clobber).`);
-    ghArgs.push('upload', tag, installerPath, '--clobber');
+    console.log(`[publish] Release ${tag} exists — uploading assets (--clobber).`);
+    ghArgs.push('upload', tag, installerPath, checksumPath, '--clobber');
   } else {
     console.log(`[publish] Creating release ${tag}...`);
     ghArgs.push(
       'create',
       tag,
       installerPath,
+      checksumPath,
       '--title',
       tag,
       '--notes',

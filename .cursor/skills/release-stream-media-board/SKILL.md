@@ -17,6 +17,29 @@ Prefer **`npm run release`** (`scripts/release.mjs`) over manual steps. Low-leve
 - `gh auth login`
 - Clean git tree before **version bump + commit** (untracked files like `build*.txt` are OK)
 
+## Auto-update requirements (read before publishing)
+
+The app has an in-app auto-updater (native Go tray shell, `shell/updater.go`) that polls
+`GET /repos/mmartinewski/stream-media-board/releases/latest` and offers the result as an update.
+For a release to actually reach installed apps via the updater:
+
+- **Never pass `--draft`** (or otherwise leave the release as a draft/prerelease) for a version meant
+  to reach users. GitHub's `/releases/latest` endpoint — which the updater calls — ignores drafts and
+  prereleases entirely; such a release is invisible to the auto-updater even though it exists on GitHub.
+- The tag must stay exactly `vMAJOR.MINOR.PATCH` (already enforced by `release.mjs`/`publish-release.mjs`) —
+  the updater's semver parser requires this exact shape and skips anything else.
+- The Windows installer asset must keep the exact name pattern `StreamMediaBoard-Setup-X.Y.Z.exe`
+  (already the case) — the updater matches on this pattern to find the right asset.
+- `publish-release.mjs` automatically computes a SHA256 checksum of the installer and uploads it as a
+  sibling `StreamMediaBoard-Setup-X.Y.Z.exe.sha256` asset — no manual action needed. If you ever publish
+  a release manually via `gh release create/upload` instead of the script, upload that checksum file too;
+  otherwise the updater will still install the update (the checksum check is best-effort) but without
+  integrity verification.
+- The shell executable's embedded version (`main.appVersion`, used for the update comparison) is set
+  automatically from `package.json` during `npm run installer:inno` / `dist:signed` — no manual step.
+
+See [docs/auto-update.md](../../docs/auto-update.md) for the full design and failure-scenario matrix.
+
 ## Release notes
 
 - Path: `docs/release-notes-vX.Y.Z.md`

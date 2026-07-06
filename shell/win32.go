@@ -32,6 +32,8 @@ var (
 	procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
 
 	procCoInitializeEx = ole32.NewProc("CoInitializeEx")
+
+	procGetDiskFreeSpaceExW = kernel32.NewProc("GetDiskFreeSpaceExW")
 )
 
 const (
@@ -51,8 +53,11 @@ const (
 	lrLoadFromFile     = 0x00000010
 	lrDefaultSize      = 0x00000040
 	mbOK               = 0x0
+	mbOKCancel         = 0x00000001
 	mbIconInfo         = 0x40
 	mbIconError        = 0x10
+	mbIconQuestion     = 0x00000020
+	idOK               = 1
 	coinitApartment    = 0x2
 )
 
@@ -210,6 +215,42 @@ func messageBox(title, text string, flags uint32) {
 	titlePtr, _ := windows.UTF16PtrFromString(title)
 	textPtr, _ := windows.UTF16PtrFromString(text)
 	_, _, _ = procMessageBoxW.Call(0, uintptr(unsafe.Pointer(textPtr)), uintptr(unsafe.Pointer(titlePtr)), uintptr(flags))
+}
+
+// confirmBox shows an OK/Cancel dialog and reports whether the user clicked OK.
+// Used before applying an auto-update, since it stops the backend and restarts
+// the app.
+func confirmBox(title, text string) bool {
+	titlePtr, _ := windows.UTF16PtrFromString(title)
+	textPtr, _ := windows.UTF16PtrFromString(text)
+	r, _, _ := procMessageBoxW.Call(
+		0,
+		uintptr(unsafe.Pointer(textPtr)),
+		uintptr(unsafe.Pointer(titlePtr)),
+		uintptr(mbOKCancel|mbIconQuestion),
+	)
+	return int32(r) == idOK
+}
+
+// freeDiskSpaceBytes returns the number of bytes available to the current user
+// on the volume containing dir. Used to refuse downloading an update when
+// there is not enough room for it.
+func freeDiskSpaceBytes(dir string) (uint64, error) {
+	dirPtr, err := windows.UTF16PtrFromString(dir)
+	if err != nil {
+		return 0, err
+	}
+	var freeAvail, total, totalFree uint64
+	r, _, e := procGetDiskFreeSpaceExW.Call(
+		uintptr(unsafe.Pointer(dirPtr)),
+		uintptr(unsafe.Pointer(&freeAvail)),
+		uintptr(unsafe.Pointer(&total)),
+		uintptr(unsafe.Pointer(&totalFree)),
+	)
+	if r == 0 {
+		return 0, e
+	}
+	return freeAvail, nil
 }
 
 var _ = syscall.Handle(0)

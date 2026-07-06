@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 )
 
 const (
@@ -30,7 +31,23 @@ type paths struct {
 	cookiesFile  string // youtube.cookies.txt
 	webviewData  string // isolated WebView2 user-data-folder for the login window
 	iconPath     string
+
+	updatesDir      string // %APPDATA%\LocalSoundboardServer\updates (downloaded installers)
+	updateStateFile string // updates\update-state.json (throttling + rate-limit backoff)
+	isPackaged      bool   // true only for a real Inno Setup install (unins000.exe present)
 }
+
+// Auto-update: GitHub repo used as the source of truth for releases, and the
+// timing knobs for the background checker. See shell/updater.go.
+const (
+	updateRepoOwner     = "mmartinewski"
+	updateRepoName      = "stream-media-board"
+	updateAssetPrefix   = "StreamMediaBoard-Setup-"
+	updateAssetSuffix   = ".exe"
+	updateCheckThrottle = 6 * time.Hour
+	updateInitialDelay  = 30 * time.Second
+	updateRecheckPeriod = 6 * time.Hour
+)
 
 func resolvePaths() (paths, error) {
 	exe, err := os.Executable()
@@ -68,18 +85,25 @@ func resolvePaths() (paths, error) {
 	appDataDir := filepath.Join(appData, appFolderName)
 
 	logsDir := filepath.Join(appDataDir, "logs")
+	updatesDir := filepath.Join(appDataDir, "updates")
 	p := paths{
-		installDir:   installDir,
-		appRoot:      appRoot,
-		nodeExe:      nodeExe,
-		backendEntry: filepath.Join(appRoot, "backend", "dist", "index.js"),
-		appDataDir:   appDataDir,
-		logsDir:      logsDir,
-		backendLog:   filepath.Join(logsDir, "shell-backend.log"),
-		latestLog:    filepath.Join(logsDir, "latest.log"),
-		cookiesFile:  filepath.Join(appDataDir, "youtube.cookies.txt"),
-		webviewData:  filepath.Join(appDataDir, "youtube-login-webview"),
-		iconPath:     filepath.Join(appRoot, "shell-assets", "play.ico"),
+		installDir:      installDir,
+		appRoot:         appRoot,
+		nodeExe:         nodeExe,
+		backendEntry:    filepath.Join(appRoot, "backend", "dist", "index.js"),
+		appDataDir:      appDataDir,
+		logsDir:         logsDir,
+		backendLog:      filepath.Join(logsDir, "shell-backend.log"),
+		latestLog:       filepath.Join(logsDir, "latest.log"),
+		cookiesFile:     filepath.Join(appDataDir, "youtube.cookies.txt"),
+		webviewData:     filepath.Join(appDataDir, "youtube-login-webview"),
+		iconPath:        filepath.Join(appRoot, "shell-assets", "play.ico"),
+		updatesDir:      updatesDir,
+		updateStateFile: filepath.Join(updatesDir, "update-state.json"),
+		// Auto-update only applies to a real Inno Setup install: unins000.exe is
+		// created exclusively by the installer, so its absence means a dev/manual
+		// run of the shell executable (no runtime/node.exe orchestration, etc.).
+		isPackaged: fileExists(filepath.Join(installDir, "unins000.exe")),
 	}
 	return p, nil
 }
