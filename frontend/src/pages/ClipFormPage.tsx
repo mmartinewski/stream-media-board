@@ -4,7 +4,7 @@ import { api, type LayoutAreaDto, type PrefetchResponse } from '../lib/api';
 import { getBrowserOverlayUrl } from '../lib/overlay';
 import type { VideoOrientation } from '../lib/api';
 import { normalizeVideoOrientation, videoOrientationLabel, type BrowserSourceMode } from '../lib/videoOrientation';
-import VideoRangeTrimmer from '../components/VideoRangeTrimmer';
+import VideoRangeTrimmer, { type VideoRangeTrimmerHandle } from '../components/VideoRangeTrimmer';
 import { isValidYoutubeUrl } from '../lib/youtube';
 import { isValidTimeString, secondsToTimeString, timeStringToSeconds } from '../lib/time';
 import { bindDocumentPointerDrag } from '../lib/documentPointerDrag';
@@ -740,6 +740,7 @@ export default function ClipFormPage({ mode }: Props) {
   const params = useParams();
   const clipId = mode === 'edit' ? Number(params.id) : NaN;
   const previewAudioRef = useRef<HTMLAudioElement>(null);
+  const videoTrimmerRef = useRef<VideoRangeTrimmerHandle>(null);
   const loopTrimPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewSessionActiveRef = useRef(false);
   const [videoPreviewNonce, setVideoPreviewNonce] = useState(0);
@@ -791,6 +792,7 @@ export default function ClipFormPage({ mode }: Props) {
   const [thumbnailDragActive, setThumbnailDragActive] = useState(false);
   const [loadingDroppedThumbnail, setLoadingDroppedThumbnail] = useState(false);
   const [loadingSuggestedThumbnail, setLoadingSuggestedThumbnail] = useState(false);
+  const [loadingVideoFrameThumbnail, setLoadingVideoFrameThumbnail] = useState(false);
   const [youtubeSessionConnected, setYoutubeSessionConnected] = useState(false);
   const [youtubeSessionUpdatedAt, setYoutubeSessionUpdatedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1369,6 +1371,20 @@ export default function ClipFormPage({ mode }: Props) {
     }
   };
 
+  const handleUseVideoFrame = async () => {
+    if (!videoTrimmerRef.current) return;
+    setLoadingVideoFrameThumbnail(true);
+    setError(null);
+    try {
+      const file = await videoTrimmerRef.current.captureCurrentFrame();
+      onThumbFile(file);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoadingVideoFrameThumbnail(false);
+    }
+  };
+
   useEffect(() => {
     if (!suggestedThumbnailUrl || thumbFile || thumbPreviewSrc) return;
     void handleUseYoutubeThumbnail();
@@ -1800,6 +1816,7 @@ export default function ClipFormPage({ mode }: Props) {
           <audio ref={previewAudioRef} preload="none" className="hidden" />
           {editorKind === 'video' ? (
             <VideoRangeTrimmer
+              ref={videoTrimmerRef}
               videoUrl={videoUrl}
               previewNonce={videoPreviewNonce}
               previewCutUrl={videoPreviewCutUrl}
@@ -1980,7 +1997,25 @@ export default function ClipFormPage({ mode }: Props) {
           <p className="mt-1 text-xs text-text-muted">
             Select, paste by drag-and-drop, or drag an image from the browser. Supported formats:
             JPEG, PNG, and WebP up to 1 MB.
+            {editorKind === 'video' && videoUrl
+              ? ' You can also capture the frame currently shown in the video trimmer.'
+              : ''}
           </p>
+          {editorKind === 'video' && videoUrl ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleUseVideoFrame()}
+                disabled={loadingVideoFrameThumbnail}
+                className="rounded-md border border-surface bg-bg px-3 py-1.5 text-sm font-medium hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loadingVideoFrameThumbnail ? 'Capturing frame...' : 'Use current video frame'}
+              </button>
+              <span className="text-xs text-text-muted">
+                Scrub the timeline to choose a frame, then capture it and adjust the crop below.
+              </span>
+            </div>
+          ) : null}
           {suggestedThumbnailUrl && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button

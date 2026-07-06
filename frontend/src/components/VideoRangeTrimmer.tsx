@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { bindDocumentPointerDrag } from '../lib/documentPointerDrag';
 import { isValidTimeString, secondsToTimeString, timeStringToSeconds } from '../lib/time';
 import { effectiveVolumeToElement } from '../lib/volume';
+import { captureVideoFrameFile } from '../lib/videoFrameCapture';
+
+export type VideoRangeTrimmerHandle = {
+  captureCurrentFrame: () => Promise<File>;
+};
 
 const MAX_CLIP_SEC = 300;
 const MIN_CLIP_SEC = 0.05;
@@ -43,45 +48,52 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-export default function VideoRangeTrimmer({
-  videoUrl,
-  previewNonce = 0,
-  previewCutUrl = null,
-  previewVolume = 100,
-  durationSeconds,
-  startTime,
-  endTime,
-  onStartChange,
-  onEndChange,
-  onPreviewEnd,
-  onPreviewError,
-  onLoopTrimPreview,
-}: {
-  videoUrl: string;
-  previewNonce?: number;
-  /** FFmpeg-cut segment from staging preview API (frame-accurate). */
-  previewCutUrl?: string | null;
-  /** Clip volume (0–100) applied to segment preview playback. */
-  previewVolume?: number;
-  durationSeconds: number | null;
-  startTime: string;
-  endTime: string;
-  onStartChange: (value: string) => void;
-  onEndChange: (value: string) => void;
-  onPreviewEnd?: () => void;
-  onPreviewError?: (message: string) => void;
-  /** Called after trim handles are released while loop preview is enabled. */
-  onLoopTrimPreview?: () => void;
-}) {
+const VideoRangeTrimmer = forwardRef<
+  VideoRangeTrimmerHandle,
+  {
+    videoUrl: string;
+    previewNonce?: number;
+    /** FFmpeg-cut segment from staging preview API (frame-accurate). */
+    previewCutUrl?: string | null;
+    /** Clip volume (0–100) applied to segment preview playback. */
+    previewVolume?: number;
+    durationSeconds: number | null;
+    startTime: string;
+    endTime: string;
+    onStartChange: (value: string) => void;
+    onEndChange: (value: string) => void;
+    onPreviewEnd?: () => void;
+    onPreviewError?: (message: string) => void;
+    /** Called after trim handles are released while loop preview is enabled. */
+    onLoopTrimPreview?: () => void;
+  }
+>(function VideoRangeTrimmer(
+  {
+    videoUrl,
+    previewNonce = 0,
+    previewCutUrl = null,
+    previewVolume = 100,
+    durationSeconds,
+    startTime,
+    endTime,
+    onStartChange,
+    onEndChange,
+    onPreviewEnd,
+    onPreviewError,
+    onLoopTrimPreview,
+  },
+  ref,
+) {
   const trackRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const dragRef = useRef<'start' | 'end' | null>(null);
+  const dragRef = useRef<'start' | 'end' | 'playhead' | null>(null);
   const scrubbingRef = useRef(false);
   const segmentPreviewActiveRef = useRef(false);
   const previewNonceRef = useRef(previewNonce);
   const durationRef = useRef(0);
   const startSecRef = useRef(0);
   const endSecRef = useRef(0);
+  const caretSecRef = useRef(0);
   const onPreviewEndRef = useRef(onPreviewEnd);
   const onPreviewErrorRef = useRef(onPreviewError);
   const onLoopTrimPreviewRef = useRef(onLoopTrimPreview);
@@ -94,9 +106,32 @@ export default function VideoRangeTrimmer({
   const previewWatchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const previewCutUrlRef = useRef(previewCutUrl);
   const previewVolumeRef = useRef(previewVolume);
-  const [playheadPct, setPlayheadPct] = useState<number | null>(null);
+  const [caretSec, setCaretSec] = useState(0);
+  const [scrubDisplaySec, setScrubDisplaySec] = useState<number | null>(null);
   previewCutUrlRef.current = previewCutUrl;
   previewVolumeRef.current = previewVolume;
+  caretSecRef.current = caretSec;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      captureCurrentFrame: async () => {
+        const video = videoRef.current;
+        if (!video || !videoUrl) {
+          throw new Error('Load a video first.');
+        }
+        video.pause();
+        const target = clampNumber(
+          caretSecRef.current,
+          startSecRef.current,
+          endSecRef.current,
+        );
+        await waitForVideoSeek(video, target);
+        return captureVideoFrameFile(video);
+      },
+    }),
+    [videoUrl],
+  );
 
   const applyPreviewVolume = useCallback((video: HTMLVideoElement) => {
     video.muted = false;
@@ -127,7 +162,11 @@ export default function VideoRangeTrimmer({
     if (!video || dur <= 0) return;
     const cut = previewCutUrlRef.current;
     const absTime = cut ? startSecRef.current + video.currentTime : video.currentTime;
-    setPlayheadPct(clampNumber((absTime / dur) * 100, 0, 100));
+    const clamped = clampNumber(absTime, startSecRef.current, endSecRef.current);
+    caretSecRef.current = clamped;
+    if (segmentPreviewActiveRef.current) {
+      setCaretSec(clamped);
+    }
   }, []);
 
   const seekToTimeFast = useCallback(
@@ -230,13 +269,13 @@ export default function VideoRangeTrimmer({
       const video = videoRef.current;
       stopPreviewWatch();
       segmentPreviewActiveRef.current = false;
-      const target = seekAfterExit ?? startSecRef.current;
-      const showPlayhead = seekAfterExit !== undefined;
-      setPlayheadPct(
-        showPlayhead && durationRef.current > 0
-          ? clampNumber((target / durationRef.current) * 100, 0, 100)
-          : null,
+      const target = clampNumber(
+        seekAfterExit ?? caretSecRef.current,
+        startSecRef.current,
+        endSecRef.current,
       );
+      caretSecRef.current = target;
+      setCaretSec(target);
       if (!video) {
         onPreviewEndRef.current?.();
         return;
@@ -285,10 +324,12 @@ export default function VideoRangeTrimmer({
             ? video.duration
             : endSecRef.current - startSecRef.current
           : endSecRef.current;
+        const loopStart = useClipDuration
+          ? Math.max(0, caretSecRef.current - startSecRef.current)
+          : caretSecRef.current;
         if (video.currentTime < end - END_STOP_LEAD_SEC) {
           return false;
         }
-        const loopStart = useClipDuration ? 0 : startSecRef.current;
         void waitForVideoSeek(video, loopStart).then(() => {
           if (!segmentPreviewActiveRef.current) return;
           void video.play().catch(() => {
@@ -326,9 +367,6 @@ export default function VideoRangeTrimmer({
 
   useEffect(() => {
     if (previewNonce <= 0) {
-      if (!scrubbingRef.current) {
-        setPlayheadPct(null);
-      }
       return;
     }
 
@@ -360,6 +398,8 @@ export default function VideoRangeTrimmer({
     if (!video || !videoUrl) return;
 
     segmentPreviewActiveRef.current = false;
+    caretSecRef.current = startSecRef.current;
+    setCaretSec(startSecRef.current);
     video.controls = false;
     video.muted = true;
     video.src = videoUrl;
@@ -367,7 +407,7 @@ export default function VideoRangeTrimmer({
 
     const onLoaded = () => {
       if (!segmentPreviewActiveRef.current) {
-        void seekToTimePrecise(startSecRef.current);
+        void seekToTimePrecise(caretSecRef.current);
       }
     };
     video.addEventListener('loadedmetadata', onLoaded);
@@ -382,11 +422,19 @@ export default function VideoRangeTrimmer({
   }, [videoUrl, seekToTimePrecise, stopScrubRaf, stopPreviewWatch]);
 
   useEffect(() => {
+    const clamped = clampNumber(caretSecRef.current, startSec, endSec);
+    if (clamped !== caretSecRef.current) {
+      caretSecRef.current = clamped;
+      setCaretSec(clamped);
+    }
+  }, [startSec, endSec]);
+
+  useEffect(() => {
     if (segmentPreviewActiveRef.current || dragRef.current || !videoUrl || duration <= 0) {
       return;
     }
-    void seekToTimePrecise(startSec);
-  }, [startTime, videoUrl, duration, seekToTimePrecise]);
+    void seekToTimePrecise(caretSecRef.current);
+  }, [startTime, endTime, videoUrl, duration, seekToTimePrecise]);
 
   useEffect(() => {
     if (previewNonce === previewNonceRef.current) return;
@@ -396,7 +444,6 @@ export default function VideoRangeTrimmer({
       if (segmentPreviewActiveRef.current) {
         exitSegmentPreview();
       }
-      setPlayheadPct(null);
       return;
     }
 
@@ -418,11 +465,17 @@ export default function VideoRangeTrimmer({
       video.src = cutUrl;
       video.load();
 
+      const caretOffset = Math.max(0, caretSecRef.current - startSecRef.current);
+
       const begin = () => {
-        video.loop = true;
+        video.loop = false;
         applyPreviewVolume(video);
-        void waitForVideoSeek(video, 0)
+        void waitForVideoSeek(video, caretOffset)
           .then(() => video.play())
+          .then(() => {
+            if (!segmentPreviewActiveRef.current) return;
+            startPreviewWatch(video, { useClipDuration: true });
+          })
           .catch(() => {
             segmentPreviewActiveRef.current = false;
             stopPreviewWatch();
@@ -440,10 +493,11 @@ export default function VideoRangeTrimmer({
 
     const playStagingSegment = () => {
       stopPreviewWatch();
+      const caret = clampNumber(caretSecRef.current, start, end);
       const begin = () => {
         video.loop = false;
         applyPreviewVolume(video);
-        void waitForVideoSeek(video, clampNumber(start, 0, dur))
+        void waitForVideoSeek(video, caret)
           .then(() => video.play())
           .then(() => {
             if (!segmentPreviewActiveRef.current) return;
@@ -522,13 +576,16 @@ export default function VideoRangeTrimmer({
     return clampNumber(value, minEnd, maxEnd);
   };
 
+  const clampCaretValue = (value: number): number => {
+    return clampNumber(value, startSecRef.current, endSecRef.current);
+  };
+
   const applyStart = (value: number, scrubVideo: boolean, immediateScrub = false) => {
     const clamped = clampStartValue(value);
     startSecRef.current = clamped;
     onStartChange(secondsToTimeString(clamped));
     if (scrubVideo && dragRef.current === 'start') {
-      const dur = durationRef.current;
-      if (dur > 0) setPlayheadPct((clamped / dur) * 100);
+      setScrubDisplaySec(clamped);
       if (immediateScrub) scrubSeekNow(clamped);
       else queueScrubSeek(clamped);
     }
@@ -539,11 +596,29 @@ export default function VideoRangeTrimmer({
     endSecRef.current = clamped;
     onEndChange(secondsToTimeString(clamped));
     if (scrubVideo && dragRef.current === 'end') {
-      const dur = durationRef.current;
-      if (dur > 0) setPlayheadPct((clamped / dur) * 100);
+      setScrubDisplaySec(clamped);
       if (immediateScrub) scrubSeekNow(clamped);
       else queueScrubSeek(clamped);
     }
+  };
+
+  const applyCaret = (value: number, scrubVideo: boolean, immediateScrub = false) => {
+    const clamped = clampCaretValue(value);
+    caretSecRef.current = clamped;
+    setCaretSec(clamped);
+    setScrubDisplaySec(clamped);
+    if (scrubVideo && dragRef.current === 'playhead') {
+      if (immediateScrub) scrubSeekNow(clamped);
+      else queueScrubSeek(clamped);
+    }
+  };
+
+  const positionCaret = (seconds: number) => {
+    const clamped = clampCaretValue(seconds);
+    caretSecRef.current = clamped;
+    setCaretSec(clamped);
+    prepareVideoForScrub(clamped);
+    void seekToTimePrecise(clamped);
   };
 
   const prepareVideoForScrub = (seekTarget: number) => {
@@ -577,7 +652,8 @@ export default function VideoRangeTrimmer({
     if (!dragRef.current) return;
     const seconds = xToSeconds(clientX);
     if (dragRef.current === 'start') applyStart(seconds, true, false);
-    else applyEnd(seconds, true, false);
+    else if (dragRef.current === 'end') applyEnd(seconds, true, false);
+    else applyCaret(seconds, true, false);
   };
 
   finishDragRef.current = () => {
@@ -595,43 +671,40 @@ export default function VideoRangeTrimmer({
         ? startSecRef.current
         : releaseHandle === 'end'
           ? endSecRef.current
-          : null;
+          : releaseHandle === 'playhead'
+            ? caretSecRef.current
+            : null;
     dragRef.current = null;
     stopScrubRaf();
     if (wasDragging) {
       lastScrubSeekRef.current = -1;
       const finishScrub = () => {
         scrubbingRef.current = false;
-        if (!segmentPreviewActiveRef.current) {
-          setPlayheadPct(null);
-        }
+        setScrubDisplaySec(null);
       };
       if (releaseTarget !== null) {
         void seekToTimePrecise(releaseTarget).finally(finishScrub);
       } else {
         finishScrub();
       }
-      if (onLoopTrimPreviewRef.current) {
-        onLoopTrimPreviewRef.current();
+      if (releaseHandle === 'start' || releaseHandle === 'end') {
+        if (onLoopTrimPreviewRef.current) {
+          onLoopTrimPreviewRef.current();
+        }
       }
     } else {
       scrubbingRef.current = false;
+      setScrubDisplaySec(null);
     }
   };
 
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (durationRef.current <= 0) return;
-    e.preventDefault();
+  const beginDrag = (
+    e: React.PointerEvent,
+    handle: 'start' | 'end' | 'playhead',
+    scrubTarget: number,
+  ) => {
     const track = trackRef.current;
-    if (!track) return;
-    const dur = durationRef.current;
-    const rect = track.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const startX = (startSecRef.current / dur) * rect.width;
-    const endX = (endSecRef.current / dur) * rect.width;
-    const handle = Math.abs(x - startX) <= Math.abs(x - endX) ? 'start' : 'end';
-    const seconds = xToSeconds(e.clientX);
-    const scrubTarget = handle === 'start' ? clampStartValue(seconds) : clampEndValue(seconds);
+    if (!track || durationRef.current <= 0) return;
 
     docDragCleanupRef.current?.();
     activePointerIdRef.current = e.pointerId;
@@ -652,66 +725,138 @@ export default function VideoRangeTrimmer({
     } catch {
       /* capture may fail on some browsers; document listeners still handle the drag */
     }
+    prepareVideoForScrub(scrubTarget);
+    queueScrubSeek(scrubTarget);
+  };
+
+  const onPlayheadPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    if (durationRef.current <= 0) return;
+    e.preventDefault();
+    const seconds = clampCaretValue(xToSeconds(e.clientX));
+    beginDrag(e, 'playhead', seconds);
+    applyCaret(seconds, true, true);
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (durationRef.current <= 0) return;
+    e.preventDefault();
+    const track = trackRef.current;
+    if (!track) return;
+    const dur = durationRef.current;
+    const rect = track.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const startX = (startSecRef.current / dur) * rect.width;
+    const endX = (endSecRef.current / dur) * rect.width;
+    const playheadX = (caretSecRef.current / dur) * rect.width;
+    const seconds = xToSeconds(e.clientX);
+    const handleHitPx = 14;
+
+    const distToPlayhead = Math.abs(x - playheadX);
+    const distToStart = Math.abs(x - startX);
+    const distToEnd = Math.abs(x - endX);
+
+    if (distToPlayhead <= handleHitPx) {
+      beginDrag(e, 'playhead', clampCaretValue(seconds));
+      applyCaret(seconds, true, true);
+      return;
+    }
+
+    if (x > startX + handleHitPx && x < endX - handleHitPx) {
+      positionCaret(seconds);
+      return;
+    }
+
+    const handle =
+      distToStart <= distToEnd ? 'start' : 'end';
+    const scrubTarget = handle === 'start' ? clampStartValue(seconds) : clampEndValue(seconds);
+
+    beginDrag(e, handle, scrubTarget);
     if (handle === 'start') applyStart(seconds, true, true);
     else applyEnd(seconds, true, true);
-    queueScrubSeek(scrubTarget);
-    prepareVideoForScrub(scrubTarget);
   };
 
   if (!videoUrl) return null;
 
   const startPct = duration > 0 ? (startSec / duration) * 100 : 0;
   const endPct = duration > 0 ? (endSec / duration) * 100 : 0;
+  const displaySec = scrubDisplaySec ?? caretSec;
+  const playheadPct = duration > 0 ? (displaySec / duration) * 100 : 0;
 
   return (
     <div className="sm:col-span-2 rounded-md border border-surface/70 bg-bg/40 p-3">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-medium">Video trim</h3>
         <span className="text-xs text-text-muted">
-          Drag the handles on the timeline (max. {MAX_CLIP_SEC / 60} min).
+          Drag trim handles or the frame caret (max. {MAX_CLIP_SEC / 60} min).
         </span>
       </div>
-      <div className="relative mt-3 aspect-video w-full overflow-hidden rounded-md border border-surface bg-black">
+      <div className="relative mt-3 flex items-center justify-center overflow-hidden rounded-md border border-surface bg-black">
         <video
           ref={videoRef}
-          className="absolute inset-0 h-full w-full object-contain"
+          className="max-h-[min(31.1rem,84.4vh)] w-full object-contain"
           playsInline
           preload="auto"
           draggable={false}
           controls={false}
         />
       </div>
-      <div
-        ref={trackRef}
-        className="relative mt-3 h-10 cursor-text touch-none rounded-md border border-surface bg-bg"
-        onPointerDown={onPointerDown}
-      >
+      <div className="relative mt-3 overflow-visible pb-1">
         <div
-          className="absolute inset-y-0 rounded-sm bg-sky-500/25"
-          style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
-        />
-        <div
-          className="absolute top-0 bottom-0 w-1 -translate-x-1/2 rounded bg-sky-100"
-          style={{ left: `${startPct}%` }}
-        />
-        <div
-          className="absolute top-0 bottom-0 w-1 -translate-x-1/2 rounded bg-sky-100"
-          style={{ left: `${endPct}%` }}
-        />
-        {playheadPct !== null ? (
+          ref={trackRef}
+          className="relative h-10 cursor-text touch-none rounded-md border border-surface bg-bg"
+          onPointerDown={onPointerDown}
+        >
           <div
-            className="pointer-events-none absolute inset-y-0 z-10 w-0.5 -translate-x-1/2 bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.85)]"
-            style={{ left: `${playheadPct}%` }}
-            aria-hidden
-          >
-            <div className="absolute -top-0.5 left-1/2 h-2.5 w-2.5 -translate-x-1/2 border border-amber-200/80 bg-amber-300 rotate-45" />
-          </div>
-        ) : null}
+            className="absolute inset-y-0 rounded-sm bg-sky-500/25"
+            style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
+          />
+          <div
+            className="absolute top-0 bottom-0 w-1 -translate-x-1/2 rounded bg-sky-100"
+            style={{ left: `${startPct}%` }}
+          />
+          <div
+            className="absolute top-0 bottom-0 w-1 -translate-x-1/2 rounded bg-sky-100"
+            style={{ left: `${endPct}%` }}
+          />
+          {duration > 0 ? (
+            <div
+              className="absolute inset-y-0 z-10 -translate-x-1/2"
+              style={{ left: `${playheadPct}%` }}
+            >
+              <div
+                className="pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.85)]"
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute -top-0.5 left-1/2 h-2.5 w-2.5 -translate-x-1/2 border border-amber-200/80 bg-amber-300 rotate-45"
+                aria-hidden
+              />
+              <div
+                role="slider"
+                aria-label="Current frame position"
+                aria-valuemin={startSec}
+                aria-valuemax={endSec}
+                aria-valuenow={displaySec}
+                className="absolute bottom-0 left-1/2 h-3.5 w-3.5 -translate-x-1/2 translate-y-1/2 cursor-grab rounded-full border-2 border-amber-200 bg-amber-300 shadow-md active:cursor-grabbing"
+                onPointerDown={onPlayheadPointerDown}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
       <p className="mt-2 min-h-[1.25rem] text-xs text-text-muted tabular-nums">
         Start <span className="font-mono text-text">{startTime}</span> · End{' '}
         <span className="font-mono text-text">{endTime}</span>
+        {duration > 0 ? (
+          <>
+            {' '}
+            · Frame <span className="font-mono text-text">{secondsToTimeString(displaySec)}</span>
+          </>
+        ) : null}
       </p>
     </div>
   );
-}
+});
+
+export default VideoRangeTrimmer;
