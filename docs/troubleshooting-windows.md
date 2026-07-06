@@ -100,13 +100,17 @@ If the tray shows **Could not launch the update installer: … Access is denied*
    - `%LOCALAPPDATA%\Programs\StreamMediaBoard`
    - `%APPDATA%\LocalSoundboardServer` (includes `updates\`)
 3. Check **Quarantine** for `StreamMediaBoard-Setup-*.exe` and restore it.
-4. **Manual unblock** of the downloaded file (if it already exists):
+4. **Kaspersky Trusted application** (often required even with folder exclusions):
+   - Settings → **Detection and Response** → **Manage exceptions** → **Add** → **Application**
+   - Browse to `%LOCALAPPDATA%\Programs\StreamMediaBoard\StreamMediaBoard.exe`
+   - Allow the app to **run other applications** / disable restrictions for child processes.
+5. **Manual unblock** of the downloaded file (if it already exists):
    - Explorer → `%APPDATA%\LocalSoundboardServer\updates\`
    - Right-click the `.exe` → **Properties** → if you see **Unblock**, check it → OK
    - Or PowerShell: `Unblock-File "$env:APPDATA\LocalSoundboardServer\updates\StreamMediaBoard-Setup-*.exe"`
 5. Run the installer manually from that folder (double-click), then retry **Check for Updates** on the next release.
 
-v0.34.7+ removes the Mark-of-the-Web block after download and launches the installer via `ShellExecute` instead of a hidden `CreateProcess`, which avoids many "Access is denied" cases on fresh downloads.
+v0.35.1+ stages the installer under `{installDir}\update-cache\` before launch (Kaspersky often blocks spawning from `%APPDATA%\Roaming` even when excluded).
 
 ## Twitch Stream Presets
 

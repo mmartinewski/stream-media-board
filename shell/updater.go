@@ -521,7 +521,7 @@ func ApplyUpdate(p paths, installerPath, version string) error {
 		"/LOG=" + logPath,
 	}
 
-	if err := launchInstaller(installerPath, installArgs); err != nil {
+	if err := launchInstaller(p.installDir, installerPath, installArgs); err != nil {
 		writeShellLog(p, "update: failed to launch installer: "+err.Error())
 
 		// Best-effort: the backend is already stopped, so try to bring it back
@@ -538,8 +538,7 @@ func ApplyUpdate(p paths, installerPath, version string) error {
 			appName,
 			"Could not launch the update installer:\n\n"+err.Error()+
 				"\n\nThe downloaded installer was kept at:\n"+installerPath+
-				"\n\nIf you have Kaspersky or another antivirus installed, check its quarantine — "+
-				"it may have blocked the file. You can also run the installer manually from the path above.",
+				"\n\nKaspersky: add StreamMediaBoard.exe as a Trusted application (not only folder exclusions), check Quarantine, then run the installer manually from the path above.",
 			mbOK|mbIconError,
 		)
 		return err
