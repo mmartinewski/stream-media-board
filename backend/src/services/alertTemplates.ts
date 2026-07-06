@@ -30,6 +30,7 @@ export interface AlertTemplateVars {
   level: number;
   message: string;
   eventType: string;
+  recipient: string;
 }
 
 export interface BuiltAlertMessage {
@@ -86,6 +87,17 @@ export function resolveSender(body: Record<string, unknown>): string {
   );
 }
 
+export function resolveRecipient(body: Record<string, unknown>): string {
+  return (
+    asString(body.recipient) ||
+    asString(body.recipientDisplayName) ||
+    asString(body.recipientUser) ||
+    asString(body.targetUser) ||
+    asString(body.targetDisplayName) ||
+    ''
+  );
+}
+
 export function resolveTierLabel(subTier: unknown, isPrime = false): string {
   if (isPrime) return 'Prime';
   const tier = asString(subTier);
@@ -137,6 +149,7 @@ export function extractTemplateVars(body: Record<string, unknown>): AlertTemplat
     level: asNumber(body.level ?? body.hypeTrainLevel),
     message: asString(body.message ?? body.cheerMessage ?? body.systemMessage),
     eventType: asString(body.eventType) || 'unknown',
+    recipient: resolveRecipient(body),
   };
 }
 
@@ -198,7 +211,9 @@ export function buildAlertMessage(
   if (normalized === 'Twitch.PayItForward') {
     return {
       kind: 'pay_it_forward',
-      title: interpolate('{username} pagou a inscrição em frente!', vars),
+      title: vars.recipient
+        ? interpolate('{username} repassou o presente para {recipient}!', vars)
+        : interpolate('{username} repassou o presente para alguém do chat!', vars),
     };
   }
 

@@ -28,7 +28,7 @@ const ALERT_KIND_LABELS: Record<(typeof CONFIGURABLE_ALERT_KINDS)[number], strin
   resub: 'Renovação de inscrição',
   gift_sub: 'Inscrição presenteada',
   gift_bomb: 'Gift bomb',
-  pay_it_forward: 'Inscrição em frente',
+  pay_it_forward: 'Repassou o presente',
   gift_paid_upgrade: 'Sub presenteada renovada',
   prime_paid_upgrade: 'Prime → paga',
   cheer: 'Bits',

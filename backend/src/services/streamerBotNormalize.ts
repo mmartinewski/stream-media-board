@@ -73,6 +73,10 @@ function isGiftBombEvent(source: string, eventType: string | null): boolean {
   return source === 'TwitchGiftBomb' || eventType === 'Twitch.GiftBomb';
 }
 
+function isPayItForwardEvent(source: string, eventType: string | null): boolean {
+  return source === 'TwitchPayItForward' || eventType === 'Twitch.PayItForward';
+}
+
 export function resolveStreamerBotEventType(body: Record<string, unknown>): string | null {
   const explicit = firstString(body.eventType, body.event_type);
   if (explicit) return explicit;
@@ -129,13 +133,27 @@ export function normalizeStreamerBotPayload(
     }
   } else if (isGiftBombEvent(source, eventType) && !anonymous) {
     sender = firstString(body.user, body.userName, sender);
+  } else if (isPayItForwardEvent(source, eventType)) {
+    displayName = firstString(body.displayName, body.user, body.userName);
+    userName = firstString(body.userName, body.login, body.user);
   }
+
+  const recipient = isPayItForwardEvent(source, eventType)
+    ? firstString(
+        body.recipient,
+        body.recipientDisplayName,
+        body.recipientUser,
+        body.targetUser,
+        body.targetDisplayName,
+      )
+    : '';
 
   return {
     ...body,
     ...(eventType ? { eventType } : {}),
     ...(displayName ? { displayName } : {}),
     ...(userName ? { userName } : {}),
+    ...(recipient ? { recipient } : {}),
     subTier: body.subTier ?? body.sub_tier ?? body.tier ?? body.subTierString,
     months:
       body.months ??

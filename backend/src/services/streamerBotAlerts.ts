@@ -97,6 +97,7 @@ export function buildAlertFromTestRequest(body: unknown): AlertDto | null {
     months: record.months ?? 3,
     isPrime: kind === 'sub_prime' || record.isPrime === true,
     sender: record.sender ?? 'GifterTeste',
+    recipient: record.recipient ?? record.recipientDisplayName,
     amount: record.amount ?? 5,
     bits: record.bits ?? 100,
     viewers: record.viewers ?? 42,
