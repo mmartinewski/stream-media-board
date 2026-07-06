@@ -83,6 +83,31 @@ powershell -ExecutionPolicy Bypass -File scripts\diagnose-installed.ps1
 
 This checks paths, port 3847, starts the backend briefly, and prints log tails.
 
+## In-app update: "Access is denied" when launching installer
+
+The updater downloads the installer to:
+
+```
+%APPDATA%\LocalSoundboardServer\updates\StreamMediaBoard-Setup-X.Y.Z.exe
+```
+
+If the tray shows **Could not launch the update installer: … Access is denied**:
+
+### On the failing machine (do all of these)
+
+1. **Trust the signing certificate** (once per PC) — see `scripts/trust-cert-on-target.ps1` with the public `.cer` from the build machine.
+2. **Antivirus exclusions** — add both folders:
+   - `%LOCALAPPDATA%\Programs\StreamMediaBoard`
+   - `%APPDATA%\LocalSoundboardServer` (includes `updates\`)
+3. Check **Quarantine** for `StreamMediaBoard-Setup-*.exe` and restore it.
+4. **Manual unblock** of the downloaded file (if it already exists):
+   - Explorer → `%APPDATA%\LocalSoundboardServer\updates\`
+   - Right-click the `.exe` → **Properties** → if you see **Unblock**, check it → OK
+   - Or PowerShell: `Unblock-File "$env:APPDATA\LocalSoundboardServer\updates\StreamMediaBoard-Setup-*.exe"`
+5. Run the installer manually from that folder (double-click), then retry **Check for Updates** on the next release.
+
+v0.34.7+ removes the Mark-of-the-Web block after download and launches the installer via `ShellExecute` instead of a hidden `CreateProcess`, which avoids many "Access is denied" cases on fresh downloads.
+
 ## Twitch Stream Presets
 
 Full setup: **[twitch-stream-presets.md](./twitch-stream-presets.md)**.

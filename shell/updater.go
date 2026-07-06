@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -481,6 +480,7 @@ func DownloadUpdate(p paths, info *updateInfo, onProgress func(pct int)) (string
 	if err := os.Rename(tmpPath, finalPath); err != nil {
 		return "", fmt.Errorf("could not finalize downloaded installer: %w", err)
 	}
+	unblockDownloadedFile(finalPath)
 	return finalPath, nil
 }
 
@@ -512,18 +512,16 @@ func ApplyUpdate(p paths, installerPath, version string) error {
 	}
 	logPath := filepath.Join(p.logsDir, "installer-"+version+".log")
 
-	cmd := exec.Command(
-		installerPath,
+	installArgs := []string{
 		"/VERYSILENT",
 		"/SUPPRESSMSGBOXES",
 		"/NORESTART",
 		"/CLOSEAPPLICATIONS",
 		"/autoupdate=1",
-		"/LOG="+logPath,
-	)
-	configureBackendCmd(cmd)
+		"/LOG=" + logPath,
+	}
 
-	if err := cmd.Start(); err != nil {
+	if err := launchInstaller(installerPath, installArgs); err != nil {
 		writeShellLog(p, "update: failed to launch installer: "+err.Error())
 
 		// Best-effort: the backend is already stopped, so try to bring it back
