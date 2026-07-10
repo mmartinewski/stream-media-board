@@ -75,3 +75,20 @@ CREATE TABLE IF NOT EXISTS alert_media_triggers (
     gif_external_id TEXT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS streamerbot_webhook_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    received_at TEXT NOT NULL,
+    event_type TEXT,
+    alert_kind TEXT,
+    alert_id TEXT,
+    error TEXT,
+    payload_json TEXT NOT NULL,
+    alert_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_streamerbot_webhook_events_received_at
+    ON streamerbot_webhook_events(received_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_streamerbot_webhook_events_event_type
+    ON streamerbot_webhook_events(event_type);

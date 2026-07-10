@@ -163,6 +163,35 @@ export interface AlertTriggerTestResponse {
   };
 }
 
+export interface StreamerBotWebhookEventListItem {
+  id: number;
+  received_at: string;
+  event_type: string | null;
+  alert_kind: string | null;
+  alert_id: string | null;
+  error: string | null;
+}
+
+export interface StreamerBotWebhookEventsResponse {
+  items: StreamerBotWebhookEventListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface StreamerBotWebhookEventDetail extends StreamerBotWebhookEventListItem {
+  payload: unknown;
+  alert: unknown;
+}
+
+export interface StreamerBotWebhookEventQuery {
+  eventType?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface LayoutAreaDto {
   id: number;
   name: string;
@@ -883,4 +912,20 @@ export const api = {
       `/api/alerts/triggers/${encodeURIComponent(kind)}/test`,
       { method: 'POST' },
     ),
+  getStreamerBotWebhookEvents: (query: StreamerBotWebhookEventQuery = {}) => {
+    const params = new URLSearchParams();
+    if (query.eventType) params.set('eventType', query.eventType);
+    if (query.from) params.set('from', query.from);
+    if (query.to) params.set('to', query.to);
+    if (query.limit != null) params.set('limit', String(query.limit));
+    if (query.offset != null) params.set('offset', String(query.offset));
+    const qs = params.toString();
+    return request<StreamerBotWebhookEventsResponse>(
+      `/api/webhooks/streamerbot/events${qs ? `?${qs}` : ''}`,
+    );
+  },
+  getStreamerBotWebhookEvent: (id: number) =>
+    request<StreamerBotWebhookEventDetail>(`/api/webhooks/streamerbot/events/${id}`),
+  getStreamerBotWebhookEventTypes: () =>
+    request<{ eventTypes: string[] }>('/api/webhooks/streamerbot/event-types'),
 };

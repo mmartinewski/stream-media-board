@@ -32,6 +32,12 @@ const NAV_ITEMS: ReadonlyArray<{
     icon: <AlertsIcon className={NAV_ICON_CLASS} />,
   },
   {
+    to: '/settings/streamerbot-events',
+    label: 'Eventos SB',
+    end: false,
+    icon: <WebhookEventsIcon className={NAV_ICON_CLASS} />,
+  },
+  {
     to: '/settings/twitch-presets',
     label: 'Twitch presets',
     end: false,
@@ -227,6 +233,26 @@ function AlertsIcon({ className }: { className?: string }) {
     >
       <path d="M10 3.5a4.5 4.5 0 0 1 4.5 4.5v2.8l1.2 2.4H4.3l1.2-2.4V8a4.5 4.5 0 0 1 4.5-4.5z" />
       <path d="M8.5 15.5a1.5 1.5 0 0 0 3 0" />
+    </svg>
+  );
+}
+
+function WebhookEventsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    >
+      <path d="M4 6.5h8.5a3 3 0 1 1 0 6H9" />
+      <path d="M16 13.5H7.5a3 3 0 1 1 0-6H11" />
+      <path d="M7 4.5 4 6.5 7 8.5" />
+      <path d="M13 15.5 16 13.5 13 11.5" />
     </svg>
   );
 }

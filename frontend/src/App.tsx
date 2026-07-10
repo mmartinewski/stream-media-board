@@ -12,6 +12,7 @@ import BrowseCategoriesPage from './pages/BrowseCategoriesPage';
 import BrowseCategoryClipsPage from './pages/BrowseCategoryClipsPage';
 import TwitchPresetsPage from './pages/TwitchPresetsPage';
 import AlertTriggersPage from './pages/AlertTriggersPage';
+import StreamerBotEventsPage from './pages/StreamerBotEventsPage';
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/settings/layout-areas" element={<LayoutAreasPage />} />
         <Route path="/settings/twitch-presets" element={<TwitchPresetsPage />} />
         <Route path="/settings/alert-triggers" element={<AlertTriggersPage />} />
+        <Route path="/settings/streamerbot-events" element={<StreamerBotEventsPage />} />
       </Route>
     </Routes>
   );
