@@ -7,6 +7,7 @@ import { migrate } from './db/migrate.js';
 import { closeDb, getDb } from './db/connection.js';
 import { cleanupExpiredStaging } from './services/stagingStore.js';
 import { backfillVideoClipMetadata } from './services/videoClipMetadata.js';
+import { attachAdvssWebSocket, closeAdvssWebSocket } from './services/advssHub.js';
 
 export interface BackendServer {
   readonly paths: AppPaths;
@@ -61,12 +62,14 @@ export async function startBackendServer(): Promise<BackendServer> {
   }
 
   logger.info(`Express listening at http://0.0.0.0:${port}`);
+  attachAdvssWebSocket(server);
 
   let stopped = false;
   const stop = async (signal = 'shutdown') => {
     if (stopped) return;
     stopped = true;
     logger.info(`received ${signal}, shutting down...`);
+    closeAdvssWebSocket();
     await closeServer(server);
     closeDb();
     closeLogger();

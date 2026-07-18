@@ -138,6 +138,31 @@ export function migrateStoredMediaPaths(db: BetterDatabase, paths: AppPaths): nu
     changes += 1;
   }
 
+  const macroTable = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'macros'`)
+    .get() as { name: string } | undefined;
+  if (macroTable) {
+    const macroRows = db
+      .prepare(`SELECT id, thumbnail_original_path, thumbnail_cropped_path FROM macros`)
+      .all() as Array<{
+      id: number;
+      thumbnail_original_path: string | null;
+      thumbnail_cropped_path: string | null;
+    }>;
+
+    const updateMacro = db.prepare(
+      `UPDATE macros SET thumbnail_original_path = ?, thumbnail_cropped_path = ? WHERE id = ?`,
+    );
+
+    for (const row of macroRows) {
+      const orig = normalizeColumn(paths, row.thumbnail_original_path);
+      const crop = normalizeColumn(paths, row.thumbnail_cropped_path);
+      if (orig === row.thumbnail_original_path && crop === row.thumbnail_cropped_path) continue;
+      updateMacro.run(orig, crop, row.id);
+      changes += 1;
+    }
+  }
+
   const cacheRows = db
     .prepare(`SELECT provider, external_id, media_path, preview_path FROM media_search_cache`)
     .all() as Array<{

@@ -21,6 +21,7 @@ export interface AppPaths {
   readonly mediaVideo: string;
   readonly mediaThumbnails: string;
   readonly mediaCategoryThumbnails: string;
+  readonly mediaMacroThumbnails: string;
   readonly mediaTodoBackgrounds: string;
   readonly mediaTodoThumbnails: string;
   readonly mediaGifs: string;
@@ -48,6 +49,7 @@ export function resolvePaths(): AppPaths {
   const mediaVideo = join(appData, 'media', 'video');
   const mediaThumbnails = join(appData, 'media', 'thumbnails');
   const mediaCategoryThumbnails = join(appData, 'media', 'category-thumbnails');
+  const mediaMacroThumbnails = join(appData, 'media', 'macro-thumbnails');
   const mediaTodoBackgrounds = join(appData, 'media', 'todo-backgrounds');
   const mediaTodoThumbnails = join(appData, 'media', 'todo-thumbnails');
   const mediaGifs = join(appData, 'media', 'gifs');
@@ -67,6 +69,7 @@ export function resolvePaths(): AppPaths {
     mediaVideo,
     mediaThumbnails,
     mediaCategoryThumbnails,
+    mediaMacroThumbnails,
     mediaTodoBackgrounds,
     mediaTodoThumbnails,
     mediaGifs,
@@ -116,6 +119,7 @@ export function ensureAppDataDirs(paths: AppPaths): void {
     paths.mediaVideo,
     paths.mediaThumbnails,
     paths.mediaCategoryThumbnails,
+    paths.mediaMacroThumbnails,
     paths.mediaTodoBackgrounds,
     paths.mediaTodoThumbnails,
     paths.mediaGifs,

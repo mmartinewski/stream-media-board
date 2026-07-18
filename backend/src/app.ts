@@ -22,6 +22,9 @@ import { twitchWebhookRouter } from './routes/twitchWebhook.js';
 import { streamerBotWebhookRouter } from './routes/streamerBotWebhook.js';
 import { alertsRouter } from './routes/alerts.js';
 import { alertTriggersRouter } from './routes/alertTriggers.js';
+import { advssRouter } from './routes/advss.js';
+import { macrosRouter } from './routes/macros.js';
+import { macroThumbnailsRouter } from './routes/macroThumbnails.js';
 import { logger } from './lib/logger.js';
 import type { AppPaths } from './config/paths.js';
 
@@ -51,12 +54,15 @@ export function createApp(paths: AppPaths): Express {
   app.use('/api/webhooks/streamerbot', streamerBotWebhookRouter());
   app.use('/api/alerts', alertsRouter());
   app.use('/api/alerts/triggers', alertTriggersRouter());
+  app.use('/api/advss', advssRouter());
+  app.use('/api/macros', macrosRouter(paths));
+  app.use('/api/macro-thumbnails', macroThumbnailsRouter(paths));
 
   if (existsSync(paths.frontendDist)) {
     app.use(express.static(paths.frontendDist));
     const indexHtml = join(paths.frontendDist, 'index.html');
     app.get('*', (req, res, next) => {
-      if (req.method !== 'GET' || req.path.startsWith('/api')) {
+      if (req.method !== 'GET' || req.path.startsWith('/api') || req.path.startsWith('/ws')) {
         next();
         return;
       }

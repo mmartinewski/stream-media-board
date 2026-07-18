@@ -13,6 +13,7 @@ import BrowseCategoryClipsPage from './pages/BrowseCategoryClipsPage';
 import TwitchPresetsPage from './pages/TwitchPresetsPage';
 import AlertTriggersPage from './pages/AlertTriggersPage';
 import StreamerBotEventsPage from './pages/StreamerBotEventsPage';
+import MacrosPage from './pages/MacrosPage';
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/browse/categories/:categoryId" element={<BrowseCategoryClipsPage />} />
         <Route path="/checklists" element={<ChecklistsListPage />} />
         <Route path="/gifs" element={<GifsPage />} />
+        <Route path="/macros" element={<MacrosPage />} />
         <Route path="/checklists/:id" element={<ChecklistEditorPage mode="edit" />} />
         <Route path="/clips/new" element={<ClipFormPage mode="create" />} />
         <Route path="/clips/:id/edit" element={<ClipFormPage mode="edit" />} />

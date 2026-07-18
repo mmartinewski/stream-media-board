@@ -192,6 +192,29 @@ export interface StreamerBotWebhookEventQuery {
   offset?: number;
 }
 
+export interface AdvssStatusResponse {
+  path: string;
+  connected_clients: number;
+}
+
+export interface AdvssSendResponse {
+  status: 'ok';
+  message: string;
+  sent: number;
+  connected_clients: number;
+}
+
+export interface MacroDto {
+  id: number;
+  name: string;
+  event_message: string;
+  sort_order: number;
+  thumbnail_original_url?: string | null;
+  thumbnail_cropped_url?: string | null;
+  thumbnail_crop_meta?: string | null;
+  created_at: string;
+}
+
 export interface LayoutAreaDto {
   id: number;
   name: string;
@@ -928,4 +951,27 @@ export const api = {
     request<StreamerBotWebhookEventDetail>(`/api/webhooks/streamerbot/events/${id}`),
   getStreamerBotWebhookEventTypes: () =>
     request<{ eventTypes: string[] }>('/api/webhooks/streamerbot/event-types'),
+  getAdvssStatus: () => request<AdvssStatusResponse>('/api/advss/status'),
+  sendAdvssMessage: (message: string) =>
+    request<AdvssSendResponse>('/api/advss/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    }),
+  getMacros: () => request<{ macros: MacroDto[] }>('/api/macros'),
+  getMacro: (id: number) => request<MacroDto>(`/api/macros/${id}`),
+  createMacro: (body: FormData) =>
+    request<MacroDto>('/api/macros', {
+      method: 'POST',
+      body,
+    }),
+  updateMacro: (id: number, body: FormData) =>
+    request<MacroDto>(`/api/macros/${id}`, {
+      method: 'PUT',
+      body,
+    }),
+  deleteMacro: (id: number) =>
+    request<{ status: string; id: number }>(`/api/macros/${id}`, {
+      method: 'DELETE',
+    }),
 };

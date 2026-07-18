@@ -26,6 +26,12 @@ const NAV_ITEMS: ReadonlyArray<{
     icon: <GifsIcon className={NAV_ICON_CLASS} />,
   },
   {
+    to: '/macros',
+    label: 'Macros OBS',
+    end: false,
+    icon: <MacrosIcon className={NAV_ICON_CLASS} />,
+  },
+  {
     to: '/settings/alert-triggers',
     label: 'Alertas',
     end: false,
@@ -188,6 +194,26 @@ function GifsIcon({ className }: { className?: string }) {
     >
       <rect x="3" y="5" width="14" height="10" rx="1.5" />
       <path d="M7 9h2M11 9h2M7 12h6" />
+    </svg>
+  );
+}
+
+function MacrosIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    >
+      <rect x="3" y="3" width="6" height="6" rx="1" />
+      <rect x="11" y="3" width="6" height="6" rx="1" />
+      <rect x="3" y="11" width="6" height="6" rx="1" />
+      <rect x="11" y="11" width="6" height="6" rx="1" />
     </svg>
   );
 }

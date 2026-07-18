@@ -92,3 +92,14 @@ CREATE INDEX IF NOT EXISTS idx_streamerbot_webhook_events_received_at
 
 CREATE INDEX IF NOT EXISTS idx_streamerbot_webhook_events_event_type
     ON streamerbot_webhook_events(event_type);
+
+CREATE TABLE IF NOT EXISTS macros (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    event_message TEXT NOT NULL,
+    thumbnail_original_path TEXT,
+    thumbnail_cropped_path TEXT,
+    thumbnail_crop_meta TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

@@ -11,6 +11,8 @@ interface Props {
   crop: CropRect | null;
   onCropChange: (c: CropRect) => void;
   onNaturalReady: (nw: number, nh: number) => void;
+  /** Smaller preview for tight modals (e.g. macros). */
+  compact?: boolean;
 }
 
 export default function ImageThumbnailCropper({
@@ -18,6 +20,7 @@ export default function ImageThumbnailCropper({
   crop,
   onCropChange,
   onNaturalReady,
+  compact = false,
 }: Props) {
   const imgRef = useRef<HTMLImageElement>(null);
   const dragRef = useRef<{
@@ -109,13 +112,21 @@ export default function ImageThumbnailCropper({
   };
 
   return (
-    <div className="max-w-full rounded-md border border-surface bg-bg-soft p-2">
+    <div
+      className={
+        'max-w-full rounded-md border border-surface bg-bg-soft ' +
+        (compact ? 'p-1.5' : 'p-2')
+      }
+    >
       <div className="relative inline-block max-w-full">
         <img
           ref={imgRef}
           src={src}
           alt="Thumbnail preview"
-          className="block max-h-72 w-auto max-w-full select-none"
+          className={
+            'block w-auto max-w-full select-none ' +
+            (compact ? 'max-h-40' : 'max-h-72')
+          }
           onLoad={() => {
             const img = imgRef.current;
             if (img) {
@@ -142,9 +153,9 @@ export default function ImageThumbnailCropper({
         )}
       </div>
       {crop && (
-        <div className="mt-3 max-w-md">
+        <div className={compact ? 'mt-1.5 max-w-md' : 'mt-3 max-w-md'}>
           <label htmlFor="thumbnail-zoom" className="block text-xs font-medium text-text-muted">
-            Thumbnail zoom: {zoom}%
+            Zoom: {zoom}%
           </label>
           <input
             id="thumbnail-zoom"
@@ -157,9 +168,11 @@ export default function ImageThumbnailCropper({
           />
         </div>
       )}
-      <p className="mt-2 text-xs text-text-muted">
-        Adjust the zoom and drag the square to choose the 1:1 thumbnail area.
-      </p>
+      {!compact ? (
+        <p className="mt-2 text-xs text-text-muted">
+          Adjust the zoom and drag the square to choose the 1:1 thumbnail area.
+        </p>
+      ) : null}
     </div>
   );
 }
