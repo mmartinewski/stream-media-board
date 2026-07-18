@@ -8,7 +8,7 @@
 //     MicrosoftEdgeWebview2Setup.exe(Evergreen bootstrapper, best-effort)
 //     app/
 //       package.json                (production deps only)
-//       node_modules/**             (better-sqlite3 ABI 127, express, multer, sharp)
+//       node_modules/**             (better-sqlite3 ABI 127, express, multer, sharp, ws)
 //       backend/dist/**
 //       frontend/dist/**
 //       bin/**                       (ffmpeg/ffprobe/yt-dlp + dlls)
