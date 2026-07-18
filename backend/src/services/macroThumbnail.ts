@@ -55,9 +55,9 @@ export function macroThumbnailUrls(
   }
   return {
     thumbnail_original_url: row.thumbnail_original_path
-      ? `/api/macro-thumbnails/${macroId}/original`
+      ? `/api/thumbnails/m/${macroId}/original`
       : null,
-    thumbnail_cropped_url: `/api/macro-thumbnails/${macroId}/cropped`,
+    thumbnail_cropped_url: `/api/thumbnails/m/${macroId}/cropped`,
   };
 }
 

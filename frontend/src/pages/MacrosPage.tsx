@@ -145,6 +145,7 @@ export default function MacrosPage() {
         {macros.map((macro) => {
           const initial = macro.name.trim().charAt(0).toUpperCase() || '?';
           const thumb = macro.thumbnail_cropped_url;
+          const busy = busyId != null;
           return (
             <li key={macro.id} className="group relative">
               <button
@@ -159,11 +160,26 @@ export default function MacrosPage() {
               >
                 <span aria-hidden="true">✎</span>
               </button>
-              <button
-                type="button"
-                disabled={busyId != null}
-                onClick={() => void send(macro)}
-                className="flex w-full flex-col overflow-hidden rounded-md border border-surface/70 bg-bg-soft text-left transition-colors hover:border-accent disabled:opacity-60"
+              {/* Avoid <img> inside <button>: iOS Safari often fails to paint it. */}
+              <div
+                role="button"
+                tabIndex={busy ? -1 : 0}
+                aria-label={`Disparar ${macro.name}`}
+                aria-disabled={busy}
+                onClick={() => {
+                  if (!busy) void send(macro);
+                }}
+                onKeyDown={(e) => {
+                  if (busy) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    void send(macro);
+                  }
+                }}
+                className={
+                  'flex w-full cursor-pointer flex-col overflow-hidden rounded-md border border-surface/70 bg-bg-soft text-left transition-colors hover:border-accent ' +
+                  (busy ? 'pointer-events-none opacity-60' : '')
+                }
               >
                 <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-surface-soft">
                   {thumb ? (
@@ -173,6 +189,7 @@ export default function MacrosPage() {
                         alt=""
                         className="absolute inset-0 h-full w-full object-cover"
                         draggable={false}
+                        decoding="async"
                       />
                       <div className="absolute inset-0 bg-black/25" aria-hidden="true" />
                     </>
@@ -193,7 +210,7 @@ export default function MacrosPage() {
                     {macro.event_message}
                   </p>
                 </div>
-              </button>
+              </div>
             </li>
           );
         })}

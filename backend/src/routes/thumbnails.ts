@@ -1,18 +1,33 @@
 import { existsSync } from 'node:fs';
+import { basename, dirname } from 'node:path';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import type { AppPaths } from '../config/paths.js';
 import { getDb } from '../db/connection.js';
 import { getClipById } from '../db/repositories/clips.js';
+import { getMacroById } from '../db/repositories/macros.js';
 import { HttpError } from '../middleware/errorHandler.js';
 import { assertStoredPathUnderDir } from '../services/storedMediaPaths.js';
 
 const MAX_THUMBNAIL_BYTES = 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
+function sendImageFile(res: Response, resolved: string): void {
+  const lower = resolved.toLowerCase();
+  const mime = lower.endsWith('.png')
+    ? 'image/png'
+    : lower.endsWith('.webp')
+      ? 'image/webp'
+      : 'image/jpeg';
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  // root + relative name avoids Windows absolute-path/space quirks with sendFile.
+  res.sendFile(basename(resolved), { root: dirname(resolved) });
+}
+
 export function thumbnailsRouter(paths: AppPaths): Router {
   const router = Router();
 
-  const sendThumb =
+  const sendClipThumb =
     (kind: 'original' | 'cropped') =>
     (req: Request, res: Response, next: NextFunction) => {
       try {
@@ -33,10 +48,40 @@ export function thumbnailsRouter(paths: AppPaths): Router {
         if (!existsSync(resolved)) {
           throw new HttpError(404, 'Thumbnail not found.', 'thumb_missing');
         }
-        const mime =
-          resolved.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-        res.setHeader('Content-Type', mime);
-        res.sendFile(resolved);
+        sendImageFile(res, resolved);
+      } catch (err) {
+        next(err);
+      }
+    };
+
+  // Registered before /:id/* so "m" is not parsed as a clip id.
+  const sendMacroThumb =
+    (kind: 'original' | 'cropped') =>
+    (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id < 1) {
+          throw new HttpError(400, 'Invalid ID.', 'invalid_id');
+        }
+        const db = getDb(paths.databaseFile);
+        const row = getMacroById(db, id);
+        if (!row) {
+          throw new HttpError(404, 'Macro not found.', 'macro_not_found');
+        }
+        const stored =
+          kind === 'original' ? row.thumbnail_original_path : row.thumbnail_cropped_path;
+        if (!stored) {
+          throw new HttpError(404, 'Thumbnail not found.', 'thumb_missing');
+        }
+        const resolved = assertStoredPathUnderDir(
+          paths,
+          paths.mediaMacroThumbnails,
+          stored,
+        );
+        if (!existsSync(resolved)) {
+          throw new HttpError(404, 'Thumbnail not found.', 'thumb_missing');
+        }
+        sendImageFile(res, resolved);
       } catch (err) {
         next(err);
       }
@@ -89,8 +134,10 @@ export function thumbnailsRouter(paths: AppPaths): Router {
     })();
   });
 
-  router.get('/:id/original', sendThumb('original'));
-  router.get('/:id/cropped', sendThumb('cropped'));
+  router.get('/m/:id/original', sendMacroThumb('original'));
+  router.get('/m/:id/cropped', sendMacroThumb('cropped'));
+  router.get('/:id/original', sendClipThumb('original'));
+  router.get('/:id/cropped', sendClipThumb('cropped'));
 
   return router;
 }

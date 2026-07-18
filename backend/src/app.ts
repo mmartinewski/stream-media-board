@@ -24,7 +24,6 @@ import { alertsRouter } from './routes/alerts.js';
 import { alertTriggersRouter } from './routes/alertTriggers.js';
 import { advssRouter } from './routes/advss.js';
 import { macrosRouter } from './routes/macros.js';
-import { macroThumbnailsRouter } from './routes/macroThumbnails.js';
 import { logger } from './lib/logger.js';
 import type { AppPaths } from './config/paths.js';
 
@@ -56,7 +55,11 @@ export function createApp(paths: AppPaths): Express {
   app.use('/api/alerts/triggers', alertTriggersRouter());
   app.use('/api/advss', advssRouter());
   app.use('/api/macros', macrosRouter(paths));
-  app.use('/api/macro-thumbnails', macroThumbnailsRouter(paths));
+  // Legacy alias — same handlers now live under /api/thumbnails/m/:id/...
+  app.use('/api/macro-thumbnails', (req, res) => {
+    const suffix = req.url === '/' ? '' : req.url;
+    res.redirect(301, `/api/thumbnails/m${suffix}`);
+  });
 
   if (existsSync(paths.frontendDist)) {
     app.use(express.static(paths.frontendDist));
