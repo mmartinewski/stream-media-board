@@ -11,6 +11,7 @@ import { ensureTwitchStreamPresetsSchema } from './repositories/twitchPresets.js
 import { ensureAlertMediaTriggersSchema } from './repositories/alertMediaTriggers.js';
 import { ensureStreamerBotWebhookEventsSchema } from './repositories/streamerBotWebhookEvents.js';
 import { ensureMacrosSchema } from './repositories/macros.js';
+import { ensureControlDashboardSchema } from './repositories/controlDashboard.js';
 
 // IMPORTANT: keep this in sync with `schema.sql` in the same folder.
 // The `.sql` file is the human reference; this DDL is what actually runs.
@@ -84,6 +85,7 @@ export function migrate(db: BetterDatabase, paths: AppPaths): number {
   ensureAlertMediaTriggersSchema(db);
   ensureStreamerBotWebhookEventsSchema(db);
   ensureMacrosSchema(db);
+  ensureControlDashboardSchema(db);
   migrateClipCategories(db);
   ensureColumn(db, 'categories', 'thumbnail_original_path', 'TEXT');
   ensureColumn(db, 'categories', 'thumbnail_cropped_path', 'TEXT');

@@ -32,6 +32,12 @@ const NAV_ITEMS: ReadonlyArray<{
     icon: <MacrosIcon className={NAV_ICON_CLASS} />,
   },
   {
+    to: '/panel',
+    label: 'Painéis',
+    end: false,
+    icon: <PanelIcon className={NAV_ICON_CLASS} />,
+  },
+  {
     to: '/settings/alert-triggers',
     label: 'Alertas',
     end: false,
@@ -214,6 +220,26 @@ function MacrosIcon({ className }: { className?: string }) {
       <rect x="11" y="3" width="6" height="6" rx="1" />
       <rect x="3" y="11" width="6" height="6" rx="1" />
       <rect x="11" y="11" width="6" height="6" rx="1" />
+    </svg>
+  );
+}
+
+function PanelIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    >
+      <rect x="2.5" y="3" width="6" height="6" rx="1" />
+      <rect x="11.5" y="3" width="6" height="4" rx="1" />
+      <rect x="11.5" y="9.5" width="6" height="7.5" rx="1" />
+      <rect x="2.5" y="11.5" width="6" height="5.5" rx="1" />
     </svg>
   );
 }

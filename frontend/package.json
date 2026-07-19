@@ -35,11 +35,14 @@
     "@fontsource/uncial-antiqua": "^5.2.7",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "react-draggable": "^4.7.0",
+    "react-grid-layout": "^1.5.2",
     "react-router-dom": "^6.24.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@types/react-grid-layout": "^1.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.0",
     "postcss": "^8.4.0",

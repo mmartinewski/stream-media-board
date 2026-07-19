@@ -103,3 +103,30 @@ CREATE TABLE IF NOT EXISTS macros (
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS control_dashboards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL DEFAULT 'Painel',
+    columns INTEGER NOT NULL DEFAULT 12,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS control_dashboard_widgets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dashboard_id INTEGER NOT NULL,
+    widget_type TEXT NOT NULL CHECK (widget_type IN ('macro', 'clip', 'markdown', 'gif')),
+    grid_x INTEGER NOT NULL DEFAULT 0,
+    grid_y INTEGER NOT NULL DEFAULT 0,
+    grid_w INTEGER NOT NULL DEFAULT 2,
+    grid_h INTEGER NOT NULL DEFAULT 2,
+    macro_id INTEGER,
+    clip_id INTEGER,
+    gif_provider TEXT,
+    gif_external_id TEXT,
+    markdown_body TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (dashboard_id) REFERENCES control_dashboards(id) ON DELETE CASCADE,
+    FOREIGN KEY (macro_id) REFERENCES macros(id) ON DELETE SET NULL,
+    FOREIGN KEY (clip_id) REFERENCES clips(id) ON DELETE SET NULL
+);

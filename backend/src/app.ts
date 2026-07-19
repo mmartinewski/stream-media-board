@@ -24,6 +24,7 @@ import { alertsRouter } from './routes/alerts.js';
 import { alertTriggersRouter } from './routes/alertTriggers.js';
 import { advssRouter } from './routes/advss.js';
 import { macrosRouter } from './routes/macros.js';
+import { controlDashboardRouter } from './routes/controlDashboard.js';
 import { logger } from './lib/logger.js';
 import type { AppPaths } from './config/paths.js';
 
@@ -55,6 +56,7 @@ export function createApp(paths: AppPaths): Express {
   app.use('/api/alerts/triggers', alertTriggersRouter());
   app.use('/api/advss', advssRouter());
   app.use('/api/macros', macrosRouter(paths));
+  app.use('/api/control-dashboard', controlDashboardRouter());
   // Legacy alias — same handlers now live under /api/thumbnails/m/:id/...
   app.use('/api/macro-thumbnails', (req, res) => {
     const suffix = req.url === '/' ? '' : req.url;

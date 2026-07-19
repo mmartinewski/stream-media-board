@@ -215,6 +215,80 @@ export interface MacroDto {
   created_at: string;
 }
 
+export type ControlWidgetType = 'macro' | 'clip' | 'markdown' | 'gif';
+
+export interface ControlDashboardMacroRef {
+  id: number;
+  name: string;
+  event_message: string;
+  thumbnail_cropped_url: string | null;
+}
+
+export interface ControlDashboardClipRef {
+  id: number;
+  title: string;
+  clip_type: ClipType;
+  thumbnail_cropped_url: string;
+}
+
+export interface ControlDashboardGifRef {
+  provider: MediaSearchProvider;
+  external_id: string;
+  title: string;
+  preview_url: string;
+  is_animated: boolean;
+}
+
+export interface ControlDashboardWidget {
+  id: number;
+  widget_type: ControlWidgetType;
+  grid_x: number;
+  grid_y: number;
+  grid_w: number;
+  grid_h: number;
+  macro_id: number | null;
+  clip_id: number | null;
+  gif_provider: string | null;
+  gif_external_id: string | null;
+  markdown_body: string | null;
+  macro?: ControlDashboardMacroRef | null;
+  clip?: ControlDashboardClipRef | null;
+  gif?: ControlDashboardGifRef | null;
+}
+
+export interface ControlDashboardResponse {
+  id: number;
+  name: string;
+  columns: number;
+  updated_at: string;
+  widgets: ControlDashboardWidget[];
+}
+
+export interface ControlDashboardSummary {
+  id: number;
+  name: string;
+  columns: number;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface ControlDashboardListResponse {
+  dashboards: ControlDashboardSummary[];
+}
+
+export interface ControlDashboardWidgetInput {
+  widget_type: ControlWidgetType;
+  grid_x: number;
+  grid_y: number;
+  grid_w: number;
+  grid_h: number;
+  macro_id?: number | null;
+  clip_id?: number | null;
+  gif_provider?: string | null;
+  gif_external_id?: string | null;
+  markdown_body?: string | null;
+}
+
 export interface LayoutAreaDto {
   id: number;
   name: string;
@@ -973,5 +1047,31 @@ export const api = {
   deleteMacro: (id: number) =>
     request<{ status: string; id: number }>(`/api/macros/${id}`, {
       method: 'DELETE',
+    }),
+  getControlDashboards: () =>
+    request<ControlDashboardListResponse>('/api/control-dashboard'),
+  createControlDashboard: (body?: { name?: string }) =>
+    request<ControlDashboardSummary>('/api/control-dashboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    }),
+  getControlDashboard: (id: number) =>
+    request<ControlDashboardResponse>(`/api/control-dashboard/${id}`),
+  updateControlDashboard: (id: number, body: { name?: string; columns?: number }) =>
+    request<ControlDashboardSummary>(`/api/control-dashboard/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  deleteControlDashboard: (id: number) =>
+    request<{ status: string; id: number }>(`/api/control-dashboard/${id}`, {
+      method: 'DELETE',
+    }),
+  saveControlDashboard: (id: number, widgets: ControlDashboardWidgetInput[]) =>
+    request<ControlDashboardResponse>(`/api/control-dashboard/${id}/widgets`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ widgets }),
     }),
 };

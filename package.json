@@ -8,6 +8,7 @@
     "frontend"
   ],
   "scripts": {
+    "postinstall": "node scripts/patch-draggable-debug.mjs",
     "fetch:bin": "node scripts/fetch-binaries.mjs",
     "fetch:node": "node scripts/fetch-node-runtime.mjs",
     "stage:win": "node scripts/stage-windows-dist.mjs",
