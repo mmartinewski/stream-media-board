@@ -10,8 +10,7 @@ const BACKEND_PORT = Number(process.env.BACKEND_PORT ?? 3847);
  * mousedown. In the browser `process` is undefined → ReferenceError → drag never starts.
  */
 function rewriteDraggableDebug(code: string): string {
-  return code.replaceAll(
-    'process.env.DRAGGABLE_DEBUG',
+  return code.split('process.env.DRAGGABLE_DEBUG').join(
     '(typeof process !== "undefined" && process.env && process.env.DRAGGABLE_DEBUG)',
   );
 }
