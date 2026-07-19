@@ -183,7 +183,7 @@ function serializeDashboard(
   };
 }
 
-function parseIdParam(raw: string): number {
+function parseIdParam(raw: string | undefined): number {
   const id = Number(raw);
   if (!Number.isInteger(id) || id < 1) {
     throw new HttpError(400, 'Invalid dashboard id.', 'invalid_id');
